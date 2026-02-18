@@ -1,9 +1,11 @@
 ﻿#include "UI.h"
+
 #include <windows.h>
+
 #include <algorithm>
 #include <cctype>
-#include <unordered_map>
 #include <thread>
+#include <unordered_map>
 
 // ============================================
 // Configuration Implementation
@@ -80,13 +82,9 @@ namespace KeyExecutor {
     }
 
     // Map from char (lowercase) to DX scan code (from your provided code)
-    static std::unordered_map<char, uint32_t> charToScan = {
-        {'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36},
-        {'k', 37}, {'l', 38}, {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20},
-        {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44},
-        {'0', 11}, {'1', 2}, {'2', 3}, {'3', 4}, {'4', 5}, {'5', 6}, {'6', 7}, {'7', 8}, {'8', 9}, {'9', 10},
-        {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}
-    };
+    static std::unordered_map<char, uint32_t> charToScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25},
+                                                            {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},
+                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}};
 
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
@@ -124,7 +122,7 @@ namespace KeyExecutor {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Delay to allow menu close
 
             // 1. Send Esc to close menu
-            SendKey(1, true);   // Esc down (dxCode 1)
+            SendKey(1, true);  // Esc down (dxCode 1)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             SendKey(1, false);  // Esc up
 
@@ -133,7 +131,7 @@ namespace KeyExecutor {
             // 2. Send ` to open console
             SendKey(41, true);  // ` down (dxCode 41 for ~/` )
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            SendKey(41, false); // ` up
+            SendKey(41, false);  // ` up
 
             std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Wait for console to open
 
@@ -148,15 +146,14 @@ namespace KeyExecutor {
             // 4. Send Enter to execute
             SendKey(28, true);  // Enter down (dxCode 28)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            SendKey(28, false); // Enter up
+            SendKey(28, false);  // Enter up
 
             std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Wait for execution
 
             // 5. Send ` to close console
             SendKey(41, true);  // ` down
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            SendKey(41, false); // ` up
-
+            SendKey(41, false);  // ` up
         }).detach();
     }
 }
