@@ -21,9 +21,46 @@ namespace Configuration {
             logger::info("No configuration file found at {}", configPath);
             return;
         }
+
         std::string line;
+        bool inDelaysSection = false;
         while (std::getline(file, line)) {
             if (line.empty() || line[0] == ';' || line[0] == '#') continue;
+
+            if (line == "[Delays]") {
+                inDelaysSection = true;
+                continue;
+            }
+
+            if (inDelaysSection && line[0] == '[') {
+                inDelaysSection = false;  // End of section
+            }
+
+            if (inDelaysSection) {
+                size_t eqPos = line.find('=');
+                if (eqPos != std::string::npos) {
+                    std::string key = line.substr(0, eqPos);
+                    std::string value = line.substr(eqPos + 1);
+                    try {
+                        uint32_t val = std::stoul(value);
+                        if (key == "EscDelay")
+                            EscDelay = val;
+                        else if (key == "OpenConsoleDelay")
+                            OpenConsoleDelay = val;
+                        else if (key == "CharDelay")
+                            CharDelay = val;
+                        else if (key == "EnterDelay")
+                            EnterDelay = val;
+                        else if (key == "CloseConsoleDelay")
+                            CloseConsoleDelay = val;
+                    } catch (...) {
+                        logger::warn("Invalid delay value in ini: {}", line);
+                    }
+                }
+                continue;
+            }
+
+            // Regular commands
             size_t pos = line.find('|');
             if (pos != std::string::npos) {
                 std::string name = line.substr(0, pos);
@@ -33,6 +70,7 @@ namespace Configuration {
         }
         file.close();
         logger::info("Loaded {} commands from configuration", Commands.size());
+        logger::info("Loaded delays: Esc={}, OpenConsole={}, Char={}, Enter={}, CloseConsole={}", EscDelay, OpenConsoleDelay, CharDelay, EnterDelay, CloseConsoleDelay);
     }
 
     void SaveConfiguration() {
@@ -43,6 +81,12 @@ namespace Configuration {
             return;
         }
         file << "; Console Commander Config\n";
+        file << "[Delays]\n";
+        file << "EscDelay=" << EscDelay << "\n";
+        file << "OpenConsoleDelay=" << OpenConsoleDelay << "\n";
+        file << "CharDelay=" << CharDelay << "\n";
+        file << "EnterDelay=" << EnterDelay << "\n";
+        file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
         file << "; Format: Name|ConsoleCommand\n";
         file << "; Example: Add Gold|player.additem f 100\n\n";
         for (const auto& cmd : Commands) {
@@ -123,7 +167,7 @@ namespace KeyExecutor {
 
             // 1. Send Esc to close menu
             SendKey(1, true);  // Esc down (dxCode 1)
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
             SendKey(1, false);  // Esc up
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -131,33 +175,33 @@ namespace KeyExecutor {
             // 2. Check if console is already open - if not, send ` to open it
             auto ui = RE::UI::GetSingleton();
             if (ui && !ui->IsMenuOpen(RE::Console::MENU_NAME)) {
-                SendKey(41, true);  // ` down (dxCode 41 for ~/` )
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                SendKey(41, false);  // ` up
+                SendKey(41, true);                                                                         // ` down (dxCode 41 for ~/` )
+                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));  // Reuse close delay for consistency
+                SendKey(41, false);                                                                        // ` up
             } else {
                 logger::info("Console already open - skipping open step");
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Wait for console (if opened)
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::OpenConsoleDelay));  // Wait for console (if opened)
 
             // 3. Type the command char by char
             for (char c : command) {
                 SendChar(c);
-                std::this_thread::sleep_for(std::chrono::milliseconds(30));  // Small delay between chars for reliability
+                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));  // Adjustable per char
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             // 4. Send Enter to execute
-            SendKey(28, true);  // Enter down (dxCode 28)
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            SendKey(28, false);  // Enter up
+            SendKey(28, true);                                                                         // Enter down (dxCode 28)
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));  // Short delay
+            SendKey(28, false);                                                                        // Enter up
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Wait for execution
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));  // Wait for execution
 
             // 5. Send ` to close console
             SendKey(41, true);  // ` down
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
             SendKey(41, false);  // ` up
         }).detach();
     }

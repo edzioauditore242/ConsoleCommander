@@ -13,7 +13,8 @@
 #include <algorithm>
 #include <cctype>
 #include <unordered_map>
-#include <format>  // Added to ensure std::format is available
+#include <format>  // For std::format
+#include <cstdint> // For uint32_t (delays)
 
 #include "RE/U/UI.h"  // For RE::UI (menu checks)
 #include "RE/C/Console.h"  // For RE::Console::MENU_NAME

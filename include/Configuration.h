@@ -12,6 +12,13 @@ namespace Configuration {
 
     inline std::vector<ConsoleCommand> Commands;
 
+    // Adjustable delays (in ms) - loaded from ini
+    inline uint32_t EscDelay = 100;
+    inline uint32_t OpenConsoleDelay = 200;
+    inline uint32_t CharDelay = 30;
+    inline uint32_t EnterDelay = 200;
+    inline uint32_t CloseConsoleDelay = 50;
+
     void LoadConfiguration();
     void SaveConfiguration();
     void AddCommand(const ConsoleCommand& cmd);
