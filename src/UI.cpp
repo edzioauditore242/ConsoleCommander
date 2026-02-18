@@ -155,25 +155,28 @@ namespace KeyExecutor {
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-            // 1. Close SKSE menu with Esc
-            SendKey(1, true);  // Esc down
+            // 1. Wait EscDelay → then quick Esc press to close SKSE menu
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
-            SendKey(1, false);  // Esc up
+            SendKey(1, true);                                            // Esc down
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
+            SendKey(1, false);                                           // Esc up
+
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-            // 2. Open console if not already open
+            // 2. Wait OpenConsoleDelay → then quick ` press to open console (if needed)
             auto ui = RE::UI::GetSingleton();
             bool needsOpen = ui && !ui->IsMenuOpen(RE::Console::MENU_NAME);
             if (needsOpen) {
-                SendKey(41, true);  // ` down
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::OpenConsoleDelay));
-                SendKey(41, false);  // ` up
+                SendKey(41, true);                                           // ` down
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
+                SendKey(41, false);                                          // ` up
             } else {
                 logger::info("Console already open - skipping open step");
             }
 
             // Wait for console to be ready
-            std::this_thread::sleep_for(std::chrono::milliseconds(100 + (needsOpen ? 50 : 0)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             // 3. Type the command char by char
             for (char c : command) {
@@ -181,24 +184,17 @@ namespace KeyExecutor {
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));
             }
 
-            // 4. Wait after typing finishes BEFORE pressing Enter (controlled by EnterDelay)
+            // 4. Wait EnterDelay after typing → then quick Enter press
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
-
-            // 5. Press Enter to execute (quick press with small hold like console close)
             SendKey(28, true);                                           // Enter down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(28, false);                                          // Enter up
 
-            // Small pause after Enter for command processing
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-            // 6. Close console with ` (same press style as Enter)
+            // 5. Wait CloseConsoleDelay after Enter → then quick ` press to close
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
             SendKey(41, true);                                           // ` down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(41, false);                                          // ` up
-
-            // 7. Final delay after close key release (controlled by CloseConsoleDelay)
-            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
         }).detach();
     }
 }
