@@ -128,12 +128,17 @@ namespace KeyExecutor {
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-            // 2. Send ` to open console
-            SendKey(41, true);  // ` down (dxCode 41 for ~/` )
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            SendKey(41, false);  // ` up
+            // 2. Check if console is already open - if not, send ` to open it
+            auto ui = RE::UI::GetSingleton();
+            if (ui && !ui->IsMenuOpen(RE::Console::MENU_NAME)) {
+                SendKey(41, true);  // ` down (dxCode 41 for ~/` )
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                SendKey(41, false);  // ` up
+            } else {
+                logger::info("Console already open - skipping open step");
+            }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Wait for console to open
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));  // Wait for console (if opened)
 
             // 3. Type the command char by char
             for (char c : command) {
