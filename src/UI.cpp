@@ -184,18 +184,21 @@ namespace KeyExecutor {
             // 4. Wait after typing finishes BEFORE pressing Enter (controlled by EnterDelay)
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
 
-            // 5. Press Enter to execute (quick press)
+            // 5. Press Enter to execute (quick press with small hold like console close)
             SendKey(28, true);                                           // Enter down
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // very short hold on Enter
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(28, false);                                          // Enter up
 
             // Small pause after Enter for command processing
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-            // 6. Close console
-            SendKey(41, true);  // ` down
+            // 6. Close console with ` (same press style as Enter)
+            SendKey(41, true);                                           // ` down
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
+            SendKey(41, false);                                          // ` up
+
+            // 7. Final delay after close key release (controlled by CloseConsoleDelay)
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
-            SendKey(41, false);  // ` up
         }).detach();
     }
 }
