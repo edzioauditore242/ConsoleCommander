@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 // ============================================
-// Configuration Implementation (FIXED)
+// Configuration Implementation
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
@@ -28,7 +28,7 @@ namespace Configuration {
         std::string currentSection = "";
 
         while (std::getline(file, line)) {
-            // Remove carriage returns and leading/trailing whitespace
+            // Strip whitespace and carriage returns
             line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
             line.erase(0, line.find_first_not_of(" \t"));
             line.erase(line.find_last_not_of(" \t") + 1, std::string::npos);
@@ -76,7 +76,7 @@ namespace Configuration {
             }
         }
         file.close();
-        logger::info("Loaded {} commands and settings from configuration", Commands.size());
+        logger::info("Configuration Loaded: {} commands found.", Commands.size());
     }
 
     void SaveConfiguration() {
@@ -104,7 +104,7 @@ namespace Configuration {
         }
 
         file.close();
-        logger::info("Configuration saved successfully.");
+        logger::info("Configuration saved.");
     }
 
     void AddCommand(const ConsoleCommand& cmd) {
@@ -143,22 +143,18 @@ namespace KeyExecutor {
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
         char lowerC = std::tolower(static_cast<unsigned char>(c));
-
         auto it = charToScan.find(lowerC);
         if (it == charToScan.end()) return;
 
         uint32_t scan = it->second;
-
         if (isUpper) {
             SendKey(42, true);  // LShift down
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-
         SendKey(scan, true);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         SendKey(scan, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
         if (isUpper) {
             SendKey(42, false);  // LShift up
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -168,15 +164,12 @@ namespace KeyExecutor {
     void ExecuteCommand(const std::string& command) {
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-            // Close current UI
-            SendKey(1, true);  // Esc
+            SendKey(1, true);  // Esc to close menu
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
             SendKey(1, false);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-            // Open Console if not open
             auto ui = RE::UI::GetSingleton();
             if (ui && !ui->IsMenuOpen(RE::Console::MENU_NAME)) {
                 SendKey(41, true);  // Tilde
@@ -192,16 +185,12 @@ namespace KeyExecutor {
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-            // Execute
             SendKey(28, true);  // Enter
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
             SendKey(28, false);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
-
-            // Close Console
-            SendKey(41, true);
+            SendKey(41, true);  // Close Tilde
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
             SendKey(41, false);
         }).detach();
@@ -244,7 +233,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Separator();
 
         if (Configuration::Commands.empty()) {
-            ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No commands found. Edit the .ini or click 'Add Command'.");
+            ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No commands configured. Click 'Add Command' to create one.");
         } else {
             static ImGuiMCP::ImGuiTableFlags flags = ImGuiMCP::ImGuiTableFlags_Borders | ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_ScrollY;
             if (ImGuiMCP::BeginTable("CommandTable", 3, flags)) {
@@ -285,22 +274,51 @@ namespace UI::ConsoleCommander {
     }
 
     void __stdcall RenderAddCommandWindow() {
+        // RESTORED ORIGINAL UI LAYOUT
         auto viewport = ImGuiMCP::GetMainViewport();
         ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(viewport->Size.x * 0.5f, viewport->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
-        ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(500, 300), ImGuiMCP::ImGuiCond_Appearing);
+        ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(700, 500), ImGuiMCP::ImGuiCond_Appearing);
 
         ImGuiMCP::Begin("Add Command##ConsoleCommander", nullptr, ImGuiMCP::ImGuiWindowFlags_NoCollapse);
-        ImGuiMCP::InputText("Name", newCommandName, sizeof(newCommandName));
-        ImGuiMCP::InputText("Command", newCommandText, sizeof(newCommandText));
 
-        if (ImGuiMCP::Button("Save")) {
-            if (strlen(newCommandName) > 0 && strlen(newCommandText) > 0) {
-                Configuration::AddCommand(Configuration::ConsoleCommand(newCommandName, newCommandText));
-                AddCommandWindow->IsOpen = false;
-            }
+        // ESCAPE FIX: Close window if ESC is pressed inside this frame
+        if (ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape)) {
+            AddCommandWindow->IsOpen = false;
         }
+
+        ImGuiMCP::Text("Configure a new command:");
+        ImGuiMCP::Separator();
+        ImGuiMCP::Spacing();
+
+        ImGuiMCP::InputText("Command Name", newCommandName, sizeof(newCommandName));
+        ImGuiMCP::Spacing();
+
+        ImGuiMCP::Text("Console Command:");
+        ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
+
+        ImGuiMCP::Spacing();
+        ImGuiMCP::Separator();
+        ImGuiMCP::Spacing();
+
+        bool canAdd = strlen(newCommandName) > 0 && strlen(newCommandText) > 0;
+        if (!canAdd) {
+            ImGuiMCP::PushStyleVar(ImGuiMCP::ImGuiStyleVar_Alpha, 0.5f);
+        }
+
+        if (ImGuiMCP::Button("Add Command") && canAdd) {
+            Configuration::AddCommand(Configuration::ConsoleCommand(newCommandName, newCommandText));
+            AddCommandWindow->IsOpen = false;
+        }
+
+        if (!canAdd) {
+            ImGuiMCP::PopStyleVar();
+        }
+
         ImGuiMCP::SameLine();
-        if (ImGuiMCP::Button("Cancel")) AddCommandWindow->IsOpen = false;
+
+        if (ImGuiMCP::Button("Cancel")) {
+            AddCommandWindow->IsOpen = false;
+        }
 
         ImGuiMCP::End();
     }
