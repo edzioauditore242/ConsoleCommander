@@ -18,30 +18,26 @@ namespace Configuration {
         Commands.clear();
         std::string configPath = GetConfigPath();
         std::ifstream file(configPath);
-
         if (!file.is_open()) {
-            logger::info("No configuration file found at {}. Using defaults.", configPath);
+            logger::info("No configuration file found at {}", configPath);
             return;
         }
 
         std::string line;
         std::string currentSection = "";
-
         while (std::getline(file, line)) {
-            // Strip whitespace and carriage returns
+            // Trim \r, leading/trailing spaces/tabs
             line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
             line.erase(0, line.find_first_not_of(" \t"));
             line.erase(line.find_last_not_of(" \t") + 1, std::string::npos);
 
             if (line.empty() || line[0] == ';' || line[0] == '#') continue;
 
-            // Section Detection
             if (line[0] == '[' && line.back() == ']') {
                 currentSection = line.substr(1, line.size() - 2);
                 continue;
             }
 
-            // Parsing [Delays] Section
             if (currentSection == "Delays") {
                 size_t eqPos = line.find('=');
                 if (eqPos != std::string::npos) {
@@ -60,51 +56,44 @@ namespace Configuration {
                         else if (key == "CloseConsoleDelay")
                             CloseConsoleDelay = val;
                     } catch (...) {
+                        logger::warn("Invalid delay value in ini: {}", line);
                     }
                 }
-            }
-            // Parsing [ConsoleCommands] Section
-            else if (currentSection == "ConsoleCommands") {
+            } else if (currentSection == "ConsoleCommands") {
                 size_t pos = line.find('|');
                 if (pos != std::string::npos) {
                     std::string name = line.substr(0, pos);
                     std::string cmd = line.substr(pos + 1);
-                    if (!name.empty() && !cmd.empty()) {
-                        Commands.push_back(ConsoleCommand(name, cmd));
-                    }
+                    Commands.push_back(ConsoleCommand(name, cmd));
                 }
             }
         }
         file.close();
-        logger::info("Configuration Loaded: {} commands found.", Commands.size());
+        logger::info("Loaded {} commands from configuration", Commands.size());
+        logger::info("Loaded delays: Esc={}, OpenConsole={}, Char={}, Enter={}, CloseConsole={}", EscDelay, OpenConsoleDelay, CharDelay, EnterDelay, CloseConsoleDelay);
     }
 
     void SaveConfiguration() {
         std::string configPath = GetConfigPath();
         std::ofstream file(configPath, std::ios::trunc);
-
         if (!file.is_open()) {
             logger::error("Failed to save configuration to {}", configPath);
             return;
         }
-
         file << "; Console Commander Config\n\n";
-
         file << "[Delays]\n";
         file << "EscDelay=" << EscDelay << "\n";
         file << "OpenConsoleDelay=" << OpenConsoleDelay << "\n";
         file << "CharDelay=" << CharDelay << "\n";
         file << "EnterDelay=" << EnterDelay << "\n";
         file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
-
         file << "[ConsoleCommands]\n";
         file << "; Format: Name|ConsoleCommand\n";
         for (const auto& cmd : Commands) {
             file << cmd.name << "|" << cmd.command << "\n";
         }
-
         file.close();
-        logger::info("Configuration saved.");
+        logger::info("Saved {} commands to configuration", Commands.size());
     }
 
     void AddCommand(const ConsoleCommand& cmd) {
@@ -144,8 +133,10 @@ namespace KeyExecutor {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
         char lowerC = std::tolower(static_cast<unsigned char>(c));
         auto it = charToScan.find(lowerC);
-        if (it == charToScan.end()) return;
-
+        if (it == charToScan.end()) {
+            logger::warn("Unsupported character: {}", c);
+            return;
+        }
         uint32_t scan = it->second;
         if (isUpper) {
             SendKey(42, true);  // LShift down
@@ -162,19 +153,21 @@ namespace KeyExecutor {
     }
 
     void ExecuteCommand(const std::string& command) {
+        logger::info("Executing command: {}", command);
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            SendKey(1, true);  // Esc to close menu
+            SendKey(1, true);  // Esc
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
             SendKey(1, false);
-
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
             auto ui = RE::UI::GetSingleton();
             if (ui && !ui->IsMenuOpen(RE::Console::MENU_NAME)) {
                 SendKey(41, true);  // Tilde
-                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::OpenConsoleDelay));
                 SendKey(41, false);
+            } else {
+                logger::info("Console already open - skipping open step");
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::OpenConsoleDelay));
@@ -188,9 +181,9 @@ namespace KeyExecutor {
             SendKey(28, true);  // Enter
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
             SendKey(28, false);
-
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
-            SendKey(41, true);  // Close Tilde
+
+            SendKey(41, true);  // Close
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
             SendKey(41, false);
         }).detach();
@@ -201,11 +194,14 @@ namespace KeyExecutor {
 // UI Implementation
 // ============================================
 void UI::Register() {
-    if (!SKSEMenuFramework::IsInstalled()) return;
-
+    if (!SKSEMenuFramework::IsInstalled()) {
+        logger::error("SKSE Menu Framework not installed!");
+        return;
+    }
     SKSEMenuFramework::SetSection("Console Commander");
     SKSEMenuFramework::AddSectionItem("Command Manager", ConsoleCommander::Render);
     ConsoleCommander::AddCommandWindow = SKSEMenuFramework::AddWindow(ConsoleCommander::RenderAddCommandWindow, true);
+    logger::info("UI registered successfully");
 }
 
 namespace UI::ConsoleCommander {
@@ -223,6 +219,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::SameLine();
         if (ImGuiMCP::Button("Reload Config")) {
             Configuration::LoadConfiguration();
+            logger::info("Configuration reloaded");
         }
         ImGuiMCP::SameLine();
         ImGuiMCP::Text("Search:");
@@ -249,8 +246,13 @@ namespace UI::ConsoleCommander {
                     const auto& cmd = Configuration::Commands[i];
                     std::string lowerName = cmd.name;
                     std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                    std::string lowerCommand = cmd.command;
+                    std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
 
-                    if (!lowerSearch.empty() && lowerName.find(lowerSearch) == std::string::npos) continue;
+                    // Search in name OR command
+                    if (!lowerSearch.empty() && lowerName.find(lowerSearch) == std::string::npos && lowerCommand.find(lowerSearch) == std::string::npos) {
+                        continue;
+                    }
 
                     ImGuiMCP::TableNextRow();
                     ImGuiMCP::TableSetColumnIndex(0);
@@ -258,12 +260,13 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::TableSetColumnIndex(1);
                     ImGuiMCP::Text(cmd.command.c_str());
                     ImGuiMCP::TableSetColumnIndex(2);
-
                     if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
+                        logger::info("Executing command: {}", cmd.name);
                         KeyExecutor::ExecuteCommand(cmd.command);
                     }
                     ImGuiMCP::SameLine();
                     if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
+                        logger::info("Deleted command: {}", cmd.name);
                         Configuration::RemoveCommand(i);
                         break;
                     }
@@ -274,14 +277,13 @@ namespace UI::ConsoleCommander {
     }
 
     void __stdcall RenderAddCommandWindow() {
-        // RESTORED ORIGINAL UI LAYOUT
         auto viewport = ImGuiMCP::GetMainViewport();
         ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(viewport->Size.x * 0.5f, viewport->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
         ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(700, 500), ImGuiMCP::ImGuiCond_Appearing);
 
         ImGuiMCP::Begin("Add Command##ConsoleCommander", nullptr, ImGuiMCP::ImGuiWindowFlags_NoCollapse);
 
-        // ESCAPE FIX: Close window if ESC is pressed inside this frame
+        // Close on ESC
         if (ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape)) {
             AddCommandWindow->IsOpen = false;
         }
@@ -306,7 +308,9 @@ namespace UI::ConsoleCommander {
         }
 
         if (ImGuiMCP::Button("Add Command") && canAdd) {
-            Configuration::AddCommand(Configuration::ConsoleCommand(newCommandName, newCommandText));
+            Configuration::ConsoleCommand newCmd(newCommandName, newCommandText);
+            Configuration::AddCommand(newCmd);
+            logger::info("Added new command: {}", newCmd.name);
             AddCommandWindow->IsOpen = false;
         }
 
