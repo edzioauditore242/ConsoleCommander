@@ -22,7 +22,6 @@ namespace Configuration {
             logger::info("No configuration file found at {}", configPath);
             return;
         }
-
         std::string line;
         std::string currentSection = "";
         while (std::getline(file, line)) {
@@ -30,14 +29,11 @@ namespace Configuration {
             line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
             line.erase(0, line.find_first_not_of(" \t"));
             line.erase(line.find_last_not_of(" \t") + 1, std::string::npos);
-
             if (line.empty() || line[0] == ';' || line[0] == '#') continue;
-
             if (line[0] == '[' && line.back() == ']') {
                 currentSection = line.substr(1, line.size() - 2);
                 continue;
             }
-
             if (currentSection == "Delays") {
                 size_t eqPos = line.find('=');
                 if (eqPos != std::string::npos) {
@@ -153,7 +149,9 @@ namespace KeyExecutor {
     }
 
     void ExecuteCommand(const std::string& command) {
-        logger::info("Executing command: {}", command);
+        logger::info("Executing command: {} (full delays used: Esc={}, OpenConsole={}, Char={}, Enter={}, CloseConsole={})", command, Configuration::EscDelay, Configuration::OpenConsoleDelay, Configuration::CharDelay,
+                     Configuration::EnterDelay, Configuration::CloseConsoleDelay);
+
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             SendKey(1, true);  // Esc
@@ -260,15 +258,18 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::TableSetColumnIndex(1);
                     ImGuiMCP::Text(cmd.command.c_str());
                     ImGuiMCP::TableSetColumnIndex(2);
+
                     if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                        logger::info("Executing command: {}", cmd.name);
+                        logger::info("Executing command: {} (full command: {})", cmd.name, cmd.command);
                         KeyExecutor::ExecuteCommand(cmd.command);
                     }
+
                     ImGuiMCP::SameLine();
+
                     if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
-                        logger::info("Deleted command: {}", cmd.name);
+                        logger::info("Deleted command: {} (full command: {})", cmd.name, cmd.command);
                         Configuration::RemoveCommand(i);
-                        break;
+                        break;  // Exit loop since vector was modified
                     }
                 }
                 ImGuiMCP::EndTable();
@@ -309,8 +310,8 @@ namespace UI::ConsoleCommander {
 
         if (ImGuiMCP::Button("Add Command") && canAdd) {
             Configuration::ConsoleCommand newCmd(newCommandName, newCommandText);
+            logger::info("Added new command: {} (full command: {})", newCmd.name, newCmd.command);
             Configuration::AddCommand(newCmd);
-            logger::info("Added new command: {}", newCmd.name);
             AddCommandWindow->IsOpen = false;
         }
 
