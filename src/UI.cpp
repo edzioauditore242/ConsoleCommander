@@ -45,6 +45,8 @@ namespace Configuration {
                             EscDelay = val;
                         else if (key == "OpenConsoleDelay")
                             OpenConsoleDelay = val;
+                        else if (key == "TypingStartDelay")
+                            TypingStartDelay = val;
                         else if (key == "CharDelay")
                             CharDelay = val;
                         else if (key == "EnterDelay")
@@ -66,7 +68,7 @@ namespace Configuration {
         }
         file.close();
         logger::info("Loaded {} commands from configuration", Commands.size());
-        logger::info("Loaded delays: Esc={}, OpenConsole={}, Char={}, Enter={}, CloseConsole={}", EscDelay, OpenConsoleDelay, CharDelay, EnterDelay, CloseConsoleDelay);
+        logger::info("Loaded delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}", EscDelay, OpenConsoleDelay, TypingStartDelay, CharDelay, EnterDelay, CloseConsoleDelay);
     }
 
     void SaveConfiguration() {
@@ -80,6 +82,7 @@ namespace Configuration {
         file << "[Delays]\n";
         file << "EscDelay=" << EscDelay << "\n";
         file << "OpenConsoleDelay=" << OpenConsoleDelay << "\n";
+        file << "TypingStartDelay=" << TypingStartDelay << "\n";
         file << "CharDelay=" << CharDelay << "\n";
         file << "EnterDelay=" << EnterDelay << "\n";
         file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
@@ -149,8 +152,8 @@ namespace KeyExecutor {
     }
 
     void ExecuteCommand(const std::string& command) {
-        logger::info("Executing command: {} (full delays used: Esc={}, OpenConsole={}, Char={}, Enter={}, CloseConsole={})", command, Configuration::EscDelay, Configuration::OpenConsoleDelay, Configuration::CharDelay,
-                     Configuration::EnterDelay, Configuration::CloseConsoleDelay);
+        logger::info("Executing command: {} (full delays used: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={})", command, Configuration::EscDelay, Configuration::OpenConsoleDelay, Configuration::TypingStartDelay,
+                     Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay);
 
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -175,23 +178,30 @@ namespace KeyExecutor {
                 logger::info("Console already open - skipping open step");
             }
 
-            // Wait for console to be ready
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            // Small buffer after open (fixed, to let console fully appear)
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-            // 3. Type the command char by char
+            // 3. Wait TypingStartDelay before typing the FIRST character
+            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::TypingStartDelay));
+
+            // 4. Type the command char by char (CharDelay between each, including after first)
             for (char c : command) {
                 SendChar(c);
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));
             }
 
-            // 4. Wait EnterDelay after typing → then quick Enter press
+            // 5. Wait EnterDelay after typing finishes BEFORE pressing Enter
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
+
+            // 6. Quick Enter press
             SendKey(28, true);                                           // Enter down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(28, false);                                          // Enter up
 
-            // 5. Wait CloseConsoleDelay after Enter → then quick ` press to close
+            // 7. Wait CloseConsoleDelay after Enter release BEFORE closing console
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
+
+            // 8. Quick ` press to close
             SendKey(41, true);                                           // ` down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(41, false);                                          // ` up
