@@ -1,14 +1,19 @@
 #pragma once
 #include <string>
 #include <vector>
+
 namespace Configuration {
     struct ConsoleCommand {
         std::string name;
         std::string command;
-        ConsoleCommand() : name(""), command("") {}
-        ConsoleCommand(const std::string& n, const std::string& cmd) : name(n), command(cmd) {}
+        bool closeConsole = true;  // default yes (1)
+
+        ConsoleCommand() = default;
+        ConsoleCommand(const std::string& n, const std::string& cmd, bool close = true) : name(n), command(cmd), closeConsole(close) {}
     };
+
     inline std::vector<ConsoleCommand> Commands;
+
     // Adjustable delays (in ms) - loaded from ini
     inline uint32_t EscDelay = 100;
     inline uint32_t OpenConsoleDelay = 200;
@@ -16,7 +21,8 @@ namespace Configuration {
     inline uint32_t CharDelay = 30;
     inline uint32_t EnterDelay = 200;
     inline uint32_t CloseConsoleDelay = 50;
-    inline uint32_t KeyboardLayout = 0;  // 0 = QWERTY, 1 = AZERTY, 2 = QWERTY
+    inline uint32_t KeyboardLayout = 0;  // 0 = QWERTY (default), 1 = AZERTY, 2 = QWERTZ
+
     void LoadConfiguration();
     void SaveConfiguration();
     void AddCommand(const ConsoleCommand& cmd);

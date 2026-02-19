@@ -59,11 +59,25 @@ namespace Configuration {
                     }
                 }
             } else if (currentSection == "ConsoleCommands") {
-                size_t pos = line.find('|');
-                if (pos != std::string::npos) {
-                    std::string name = line.substr(0, pos);
-                    std::string cmd = line.substr(pos + 1);
-                    Commands.push_back(ConsoleCommand(name, cmd));
+                size_t pos1 = line.find('|');
+                if (pos1 != std::string::npos) {
+                    std::string name = line.substr(0, pos1);
+                    size_t pos2 = line.find('|', pos1 + 1);
+                    std::string cmd;
+                    bool close = true;
+                    if (pos2 != std::string::npos) {
+                        cmd = line.substr(pos1 + 1, pos2 - pos1 - 1);
+                        std::string closeStr = line.substr(pos2 + 1);
+                        if (!closeStr.empty()) {
+                            try {
+                                close = (std::stoi(closeStr) != 0);
+                            } catch (...) {
+                            }
+                        }
+                    } else {
+                        cmd = line.substr(pos1 + 1);
+                    }
+                    Commands.push_back(ConsoleCommand(name, cmd, close));
                 }
             }
         }
@@ -89,9 +103,9 @@ namespace Configuration {
         file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n";
         file << "KeyboardLayout=" << KeyboardLayout << " ; 0 = QWERTY (default), 1 = AZERTY, 2 = QWERTZ\n\n";
         file << "[ConsoleCommands]\n";
-        file << "; Format: Name|ConsoleCommand\n";
+        file << "; Format: Name|ConsoleCommand|CloseConsole (1=yes, 0=no)\n";
         for (const auto& cmd : Commands) {
-            file << cmd.name << "|" << cmd.command << "\n";
+            file << cmd.name << "|" << cmd.command << "|" << (cmd.closeConsole ? "1" : "0") << "\n";
         }
         file.close();
         logger::info("Saved {} commands to configuration", Commands.size());
@@ -126,26 +140,20 @@ namespace KeyExecutor {
         SendInput(1, &input, sizeof(INPUT));
     }
 
-    // QWERTY scan codes
-    static std::unordered_map<char, uint32_t> qwertyScan = {
-        {'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
-        {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
-        {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}
-    };
+    // QWERTY scan codes (decimal DIK codes)
+    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
+                                                            {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
+                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
 
-    // AZERTY scan codes
-    static std::unordered_map<char, uint32_t> azertyScan = {
-        {'a', 16}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
-        {'q', 30}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 44}, {'x', 45}, {'y', 21}, {'z', 17}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
-        {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}
-    };
+    // AZERTY scan codes (decimal Number column)
+    static std::unordered_map<char, uint32_t> azertyScan = {{'a', 16}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
+                                                            {'q', 30}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 44}, {'x', 45}, {'y', 21}, {'z', 17}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
+                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
 
-    // QWERTZ scan codes
-    static std::unordered_map<char, uint32_t> qwertzScan = {
-        {'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
-        {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
-        {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}
-    };
+    // QWERTZ scan codes (decimal Number column)
+    static std::unordered_map<char, uint32_t> qwertzScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
+                                                            {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
+                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
 
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
@@ -168,7 +176,7 @@ namespace KeyExecutor {
         uint32_t scan = it->second;
 
         if (isUpper) {
-            SendKey(42, true);
+            SendKey(42, true);  // LShift
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
@@ -183,15 +191,15 @@ namespace KeyExecutor {
         }
     }
 
-    void ExecuteCommand(const std::string& command) {
-        logger::info("Executing command: {} (full delays used: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={})", command, Configuration::EscDelay, Configuration::OpenConsoleDelay,
-                     Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay, Configuration::KeyboardLayout);
+    void ExecuteCommand(const std::string& command, bool closeConsole = true) {
+        logger::info("Executing command: {} (closeConsole: {}, delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={})", command, closeConsole ? "yes" : "no", Configuration::EscDelay,
+                     Configuration::OpenConsoleDelay, Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay, Configuration::KeyboardLayout);
 
-        std::thread([command]() {
+        std::thread([command, closeConsole]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
-            SendKey(1, true);
+            SendKey(1, true);  // Esc
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             SendKey(1, false);
 
@@ -201,7 +209,7 @@ namespace KeyExecutor {
             bool needsOpen = ui && !ui->IsMenuOpen(RE::Console::MENU_NAME);
             if (needsOpen) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::OpenConsoleDelay));
-                SendKey(41, true);
+                SendKey(41, true);  // `
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
                 SendKey(41, false);
             } else {
@@ -219,15 +227,18 @@ namespace KeyExecutor {
 
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
 
-            SendKey(28, true);
+            SendKey(28, true);  // Enter
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             SendKey(28, false);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
-
-            SendKey(41, true);
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            SendKey(41, false);
+            if (closeConsole) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
+                SendKey(41, true);  // `
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                SendKey(41, false);
+            } else {
+                logger::info("Skipping console close as per command setting");
+            }
         }).detach();
     }
 }
@@ -249,6 +260,7 @@ void UI::Register() {
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
     static char newCommandText[1024] = "";
+    static bool closeConsoleChecked = true;  // default yes
 
     void __stdcall Render() {
         ImGuiMCP::Text("Commands:");
@@ -256,6 +268,7 @@ namespace UI::ConsoleCommander {
         if (ImGuiMCP::Button("Add Command")) {
             newCommandName[0] = '\0';
             newCommandText[0] = '\0';
+            closeConsoleChecked = true;  // reset to default yes
             AddCommandWindow->IsOpen = true;
         }
         ImGuiMCP::SameLine();
@@ -303,8 +316,8 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::TableSetColumnIndex(2);
 
                     if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                        logger::info("Executing command: {} (full command: {})", cmd.name, cmd.command);
-                        KeyExecutor::ExecuteCommand(cmd.command);
+                        logger::info("Executing command: {} (full command: {}, closeConsole: {})", cmd.name, cmd.command, cmd.closeConsole ? "yes" : "no");
+                        KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
                     }
 
                     ImGuiMCP::SameLine();
@@ -345,14 +358,21 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Separator();
         ImGuiMCP::Spacing();
 
+        // New checkbox
+        ImGuiMCP::Checkbox("Close Console after Executing Command", &closeConsoleChecked);
+
+        ImGuiMCP::Spacing();
+        ImGuiMCP::Separator();
+        ImGuiMCP::Spacing();
+
         bool canAdd = strlen(newCommandName) > 0 && strlen(newCommandText) > 0;
         if (!canAdd) {
             ImGuiMCP::PushStyleVar(ImGuiMCP::ImGuiStyleVar_Alpha, 0.5f);
         }
 
         if (ImGuiMCP::Button("Add Command") && canAdd) {
-            Configuration::ConsoleCommand newCmd(newCommandName, newCommandText);
-            logger::info("Added new command: {} (full command: {})", newCmd.name, newCmd.command);
+            Configuration::ConsoleCommand newCmd(newCommandName, newCommandText, closeConsoleChecked);
+            logger::info("Added new command: {} (full command: {}, closeConsole: {})", newCmd.name, newCmd.command, newCmd.closeConsole ? "yes" : "no");
             Configuration::AddCommand(newCmd);
             AddCommandWindow->IsOpen = false;
         }
