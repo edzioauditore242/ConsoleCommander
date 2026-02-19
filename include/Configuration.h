@@ -16,7 +16,7 @@ namespace Configuration {
     inline uint32_t CharDelay = 30;
     inline uint32_t EnterDelay = 200;
     inline uint32_t CloseConsoleDelay = 50;
-    inline uint32_t KeyboardLayout = 0;  // 0 = QWERTY, 1 = AZERTY
+    inline uint32_t KeyboardLayout = 0;  // 0 = QWERTY, 1 = AZERTY, 2 = QWERTY
     void LoadConfiguration();
     void SaveConfiguration();
     void AddCommand(const ConsoleCommand& cmd);

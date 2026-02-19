@@ -13,6 +13,7 @@
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
+
     void LoadConfiguration() {
         Commands.clear();
         std::string configPath = GetConfigPath();
@@ -70,6 +71,7 @@ namespace Configuration {
         logger::info("Loaded {} commands from configuration", Commands.size());
         logger::info("Loaded delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={}", EscDelay, OpenConsoleDelay, TypingStartDelay, CharDelay, EnterDelay, CloseConsoleDelay, KeyboardLayout);
     }
+
     void SaveConfiguration() {
         std::string configPath = GetConfigPath();
         std::ofstream file(configPath, std::ios::trunc);
@@ -85,7 +87,7 @@ namespace Configuration {
         file << "CharDelay=" << CharDelay << "\n";
         file << "EnterDelay=" << EnterDelay << "\n";
         file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n";
-        file << "KeyboardLayout=" << KeyboardLayout << " ; 0 = QWERTY (default), 1 = AZERTY" << "\n\n";
+        file << "KeyboardLayout=" << KeyboardLayout << " ; 0 = QWERTY (default), 1 = AZERTY, 2 = QWERTZ\n\n";
         file << "[ConsoleCommands]\n";
         file << "; Format: Name|ConsoleCommand\n";
         for (const auto& cmd : Commands) {
@@ -94,10 +96,12 @@ namespace Configuration {
         file.close();
         logger::info("Saved {} commands to configuration", Commands.size());
     }
+
     void AddCommand(const ConsoleCommand& cmd) {
         Commands.push_back(cmd);
         SaveConfiguration();
     }
+
     void RemoveCommand(size_t index) {
         if (index < Commands.size()) {
             Commands.erase(Commands.begin() + index);
@@ -122,91 +126,108 @@ namespace KeyExecutor {
         SendInput(1, &input, sizeof(INPUT));
     }
 
-    // Scan code maps for different layouts
-    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25},
-                                                            {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},
-                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}};
+    // QWERTY scan codes
+    static std::unordered_map<char, uint32_t> qwertyScan = {
+        {'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
+        {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
+        {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}
+    };
 
-    static std::unordered_map<char, uint32_t> azertyScan = {{'a', 16}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25},
-                                                            {'q', 30}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 44}, {'x', 45}, {'y', 21}, {'z', 17}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},
-                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}};
+    // AZERTY scan codes
+    static std::unordered_map<char, uint32_t> azertyScan = {
+        {'a', 16}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
+        {'q', 30}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 44}, {'x', 45}, {'y', 21}, {'z', 17}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
+        {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}
+    };
+
+    // QWERTZ scan codes
+    static std::unordered_map<char, uint32_t> qwertzScan = {
+        {'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24},  {'p', 25},
+        {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},
+        {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}
+    };
 
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
         char lowerC = std::tolower(static_cast<unsigned char>(c));
 
-        std::unordered_map<char, uint32_t>& scanMap = (Configuration::KeyboardLayout == 1) ? azertyScan : qwertyScan;
-        auto it = scanMap.find(lowerC);
-        if (it == scanMap.end()) {
+        std::unordered_map<char, uint32_t>* scanMap;
+        if (Configuration::KeyboardLayout == 1) {
+            scanMap = &azertyScan;
+        } else if (Configuration::KeyboardLayout == 2) {
+            scanMap = &qwertzScan;
+        } else {
+            scanMap = &qwertyScan;
+        }
+
+        auto it = scanMap->find(lowerC);
+        if (it == scanMap->end()) {
             logger::warn("Unsupported character: {}", c);
             return;
         }
         uint32_t scan = it->second;
 
         if (isUpper) {
-            SendKey(42, true);  // LShift down
+            SendKey(42, true);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
+
         SendKey(scan, true);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         SendKey(scan, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
         if (isUpper) {
-            SendKey(42, false);  // LShift up
+            SendKey(42, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 
     void ExecuteCommand(const std::string& command) {
-        logger::info("Executing command: {} (full delays used: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={})", command, Configuration::EscDelay, Configuration::OpenConsoleDelay, Configuration::TypingStartDelay,
-                     Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay);
+        logger::info("Executing command: {} (full delays used: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={})", command, Configuration::EscDelay, Configuration::OpenConsoleDelay,
+                     Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay, Configuration::KeyboardLayout);
 
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-            // 1. Wait EscDelay → quick Esc press to close SKSE menu
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
-            SendKey(1, true);                                            // Esc down
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
-            SendKey(1, false);                                           // Esc up
+            SendKey(1, true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            SendKey(1, false);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-            // 2. Wait OpenConsoleDelay → quick ` press to open console (if needed)
             auto ui = RE::UI::GetSingleton();
             bool needsOpen = ui && !ui->IsMenuOpen(RE::Console::MENU_NAME);
             if (needsOpen) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::OpenConsoleDelay));
-                SendKey(41, true);                                           // ` down
-                std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
-                SendKey(41, false);                                          // ` up
+                SendKey(41, true);
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                SendKey(41, false);
             } else {
                 logger::info("Console already open - skipping open step");
             }
 
-            // Small buffer after open (fixed, to let console fully appear)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-            // 3. Wait TypingStartDelay before typing the FIRST character
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::TypingStartDelay));
 
-            // 4. Type the command char by char (CharDelay between each)
             for (char c : command) {
                 SendChar(c);
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));
             }
 
-            // 5. Wait EnterDelay after typing finishes → quick Enter press
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
-            SendKey(28, true);                                           // Enter down
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
-            SendKey(28, false);                                          // Enter up
 
-            // 6. Wait CloseConsoleDelay after Enter release → quick ` press to close
+            SendKey(28, true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            SendKey(28, false);
+
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
-            SendKey(41, true);                                           // ` down
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
-            SendKey(41, false);                                          // ` up
+
+            SendKey(41, true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            SendKey(41, false);
         }).detach();
     }
 }
@@ -270,7 +291,6 @@ namespace UI::ConsoleCommander {
                     std::string lowerCommand = cmd.command;
                     std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
 
-                    // Search in name OR command
                     if (!lowerSearch.empty() && lowerName.find(lowerSearch) == std::string::npos && lowerCommand.find(lowerSearch) == std::string::npos) {
                         continue;
                     }
@@ -292,7 +312,7 @@ namespace UI::ConsoleCommander {
                     if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
                         logger::info("Deleted command: {} (full command: {})", cmd.name, cmd.command);
                         Configuration::RemoveCommand(i);
-                        break;  // Exit loop since vector was modified
+                        break;
                     }
                 }
                 ImGuiMCP::EndTable();
@@ -307,7 +327,6 @@ namespace UI::ConsoleCommander {
 
         ImGuiMCP::Begin("Add Command##ConsoleCommander", nullptr, ImGuiMCP::ImGuiWindowFlags_NoCollapse);
 
-        // Close on ESC
         if (ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape)) {
             AddCommandWindow->IsOpen = false;
         }
