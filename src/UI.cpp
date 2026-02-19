@@ -13,7 +13,6 @@
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
-
     void LoadConfiguration() {
         Commands.clear();
         std::string configPath = GetConfigPath();
@@ -25,7 +24,6 @@ namespace Configuration {
         std::string line;
         std::string currentSection = "";
         while (std::getline(file, line)) {
-            // Trim \r, leading/trailing spaces/tabs
             line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
             line.erase(0, line.find_first_not_of(" \t"));
             line.erase(line.find_last_not_of(" \t") + 1, std::string::npos);
@@ -53,6 +51,8 @@ namespace Configuration {
                             EnterDelay = val;
                         else if (key == "CloseConsoleDelay")
                             CloseConsoleDelay = val;
+                        else if (key == "KeyboardLayout")
+                            KeyboardLayout = val;
                     } catch (...) {
                         logger::warn("Invalid delay value in ini: {}", line);
                     }
@@ -68,9 +68,8 @@ namespace Configuration {
         }
         file.close();
         logger::info("Loaded {} commands from configuration", Commands.size());
-        logger::info("Loaded delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}", EscDelay, OpenConsoleDelay, TypingStartDelay, CharDelay, EnterDelay, CloseConsoleDelay);
+        logger::info("Loaded delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={}", EscDelay, OpenConsoleDelay, TypingStartDelay, CharDelay, EnterDelay, CloseConsoleDelay, KeyboardLayout);
     }
-
     void SaveConfiguration() {
         std::string configPath = GetConfigPath();
         std::ofstream file(configPath, std::ios::trunc);
@@ -85,7 +84,8 @@ namespace Configuration {
         file << "TypingStartDelay=" << TypingStartDelay << "\n";
         file << "CharDelay=" << CharDelay << "\n";
         file << "EnterDelay=" << EnterDelay << "\n";
-        file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
+        file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n";
+        file << "KeyboardLayout=" << KeyboardLayout << " ; 0 = QWERTY (default), 1 = AZERTY" << "\n\n";
         file << "[ConsoleCommands]\n";
         file << "; Format: Name|ConsoleCommand\n";
         for (const auto& cmd : Commands) {
@@ -94,12 +94,10 @@ namespace Configuration {
         file.close();
         logger::info("Saved {} commands to configuration", Commands.size());
     }
-
     void AddCommand(const ConsoleCommand& cmd) {
         Commands.push_back(cmd);
         SaveConfiguration();
     }
-
     void RemoveCommand(size_t index) {
         if (index < Commands.size()) {
             Commands.erase(Commands.begin() + index);
@@ -124,19 +122,27 @@ namespace KeyExecutor {
         SendInput(1, &input, sizeof(INPUT));
     }
 
-    static std::unordered_map<char, uint32_t> charToScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25},
+    // Scan code maps for different layouts
+    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25},
                                                             {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},
+                                                            {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}};
+
+    static std::unordered_map<char, uint32_t> azertyScan = {{'a', 16}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38},  {'m', 50}, {'n', 49}, {'o', 24}, {'p', 25},
+                                                            {'q', 30}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47}, {'w', 44}, {'x', 45}, {'y', 21}, {'z', 17}, {'0', 11}, {'1', 2},   {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},
                                                             {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51}, {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'[', 26}, {']', 27}, {'\\', 43}};
 
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
         char lowerC = std::tolower(static_cast<unsigned char>(c));
-        auto it = charToScan.find(lowerC);
-        if (it == charToScan.end()) {
+
+        std::unordered_map<char, uint32_t>& scanMap = (Configuration::KeyboardLayout == 1) ? azertyScan : qwertyScan;
+        auto it = scanMap.find(lowerC);
+        if (it == scanMap.end()) {
             logger::warn("Unsupported character: {}", c);
             return;
         }
         uint32_t scan = it->second;
+
         if (isUpper) {
             SendKey(42, true);  // LShift down
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -158,7 +164,7 @@ namespace KeyExecutor {
         std::thread([command]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-            // 1. Wait EscDelay → then quick Esc press to close SKSE menu
+            // 1. Wait EscDelay → quick Esc press to close SKSE menu
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
             SendKey(1, true);                                            // Esc down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
@@ -166,7 +172,7 @@ namespace KeyExecutor {
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-            // 2. Wait OpenConsoleDelay → then quick ` press to open console (if needed)
+            // 2. Wait OpenConsoleDelay → quick ` press to open console (if needed)
             auto ui = RE::UI::GetSingleton();
             bool needsOpen = ui && !ui->IsMenuOpen(RE::Console::MENU_NAME);
             if (needsOpen) {
@@ -184,24 +190,20 @@ namespace KeyExecutor {
             // 3. Wait TypingStartDelay before typing the FIRST character
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::TypingStartDelay));
 
-            // 4. Type the command char by char (CharDelay between each, including after first)
+            // 4. Type the command char by char (CharDelay between each)
             for (char c : command) {
                 SendChar(c);
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));
             }
 
-            // 5. Wait EnterDelay after typing finishes BEFORE pressing Enter
+            // 5. Wait EnterDelay after typing finishes → quick Enter press
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
-
-            // 6. Quick Enter press
             SendKey(28, true);                                           // Enter down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(28, false);                                          // Enter up
 
-            // 7. Wait CloseConsoleDelay after Enter release BEFORE closing console
+            // 6. Wait CloseConsoleDelay after Enter release → quick ` press to close
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
-
-            // 8. Quick ` press to close
             SendKey(41, true);                                           // ` down
             std::this_thread::sleep_for(std::chrono::milliseconds(20));  // short hold
             SendKey(41, false);                                          // ` up
