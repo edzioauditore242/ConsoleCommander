@@ -21,7 +21,6 @@ namespace Configuration {
     inline uint32_t CharDelay = 30;
     inline uint32_t EnterDelay = 200;
     inline uint32_t CloseConsoleDelay = 50;
-    inline uint32_t KeyboardLayout = 0;  // 0 = QWERTY (default), 1 = AZERTY, 2 = QWERTZ
 
     void LoadConfiguration();
     void SaveConfiguration();

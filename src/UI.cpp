@@ -52,8 +52,9 @@ namespace Configuration {
                             EnterDelay = val;
                         else if (key == "CloseConsoleDelay")
                             CloseConsoleDelay = val;
+                        // Ignore KeyboardLayout line if present in old .ini - no error
                         else if (key == "KeyboardLayout")
-                            KeyboardLayout = val;
+                            continue;
                     } catch (...) {
                         logger::warn("Invalid delay value in ini: {}", line);
                     }
@@ -83,7 +84,7 @@ namespace Configuration {
         }
         file.close();
         logger::info("Loaded {} commands from configuration", Commands.size());
-        logger::info("Loaded delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={}", EscDelay, OpenConsoleDelay, TypingStartDelay, CharDelay, EnterDelay, CloseConsoleDelay, KeyboardLayout);
+        logger::info("Loaded delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}", EscDelay, OpenConsoleDelay, TypingStartDelay, CharDelay, EnterDelay, CloseConsoleDelay);
     }
 
     void SaveConfiguration() {
@@ -100,8 +101,7 @@ namespace Configuration {
         file << "TypingStartDelay=" << TypingStartDelay << "\n";
         file << "CharDelay=" << CharDelay << "\n";
         file << "EnterDelay=" << EnterDelay << "\n";
-        file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n";
-        file << "KeyboardLayout=" << KeyboardLayout << " ; 0 = QWERTY (default), 1 = AZERTY, 2 = QWERTZ\n\n";
+        file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
         file << "[ConsoleCommands]\n";
         file << "; Format: Name|ConsoleCommand|CloseConsole (1=yes, 0=no)\n";
         for (const auto& cmd : Commands) {
@@ -140,46 +140,27 @@ namespace KeyExecutor {
         SendInput(1, &input, sizeof(INPUT));
     }
 
-    // QWERTY scan codes
-    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18},  {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23},  {'j', 36}, {'k', 37}, {'l', 38}, {'m', 50},
-                                                            {'n', 49}, {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19},  {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47},  {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44},
-                                                            {'0', 11}, {'1', 2},  {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},  {'6', 7},  {'7', 8},  {'8', 9},   {'9', 10}, {' ', 57}, {'.', 52}, {',', 51},
-                                                            {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'"', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
-
-    // AZERTY scan codes
-    static std::unordered_map<char, uint32_t> azertyScan = {{'a', 16}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23},  {'j', 36}, {'k', 37}, {'l', 38}, {'m', 50},
-                                                            {'n', 49}, {'o', 24}, {'p', 25}, {'q', 30}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47},  {'w', 44}, {'x', 45}, {'y', 21}, {'z', 17},
-                                                            {'0', 11}, {'1', 2},  {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},  {'6', 7},  {'7', 8},  {'8', 9},   {'9', 10}, {' ', 57}, {'.', 52}, {',', 51},
-                                                            {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 5}, {'"', 4},  {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
-
-    // QWERTZ scan codes
-    static std::unordered_map<char, uint32_t> qwertzScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18},  {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23},  {'j', 36}, {'k', 37}, {'l', 38}, {'m', 50},
-                                                            {'n', 49}, {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19},  {'s', 31}, {'t', 20}, {'u', 22}, {'v', 47},  {'w', 17}, {'x', 45}, {'y', 44}, {'z', 21},
-                                                            {'0', 11}, {'1', 2},  {'2', 3},  {'3', 4},  {'4', 5},   {'5', 6},  {'6', 7},  {'7', 8},  {'8', 9},   {'9', 10}, {' ', 57}, {'.', 52}, {',', 51},
-                                                            {'/', 53}, {'-', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'"', 3}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
+    // Only QWERTY scan codes (removed AZERTY/QWERTZ)
+    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33},  {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36},  {'k', 37}, {'l', 38}, {'m', 50},
+                                                            {'n', 49}, {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19}, {'s', 31},  {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17},  {'x', 45}, {'y', 21}, {'z', 44},
+                                                            {'0', 11}, {'1', 2},  {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},   {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10},  {' ', 57}, {'.', 52}, {',', 51},
+                                                            {'/', 53}, {'-', 12}, {'_', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'"', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
 
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
         char lowerC = std::tolower(static_cast<unsigned char>(c));
 
-        std::unordered_map<char, uint32_t>* scanMap;
-        if (Configuration::KeyboardLayout == 1) {
-            scanMap = &azertyScan;
-        } else if (Configuration::KeyboardLayout == 2) {
-            scanMap = &qwertzScan;
-        } else {
-            scanMap = &qwertyScan;
-        }
-
-        auto it = scanMap->find(lowerC);
-        if (it == scanMap->end()) {
+        // Always use QWERTY map now
+        auto it = qwertyScan.find(lowerC);
+        if (it == qwertyScan.end()) {
             logger::warn("Unsupported character: {}", c);
             return;
         }
         uint32_t scan = it->second;
 
-        if (isUpper || c == '"') {  // " always needs Shift
-            SendKey(42, true);      // LShift
+        // Force Shift for uppercase, underscore, double quote
+        if (isUpper || c == '_' || c == '"') {
+            SendKey(42, true);  // LShift down
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
@@ -188,15 +169,15 @@ namespace KeyExecutor {
         SendKey(scan, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        if (isUpper || c == '"') {
+        if (isUpper || c == '_' || c == '"') {
             SendKey(42, false);  // LShift up
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 
     void ExecuteCommand(const std::string& command, bool closeConsole = true) {
-        logger::info("Executing command: {} (closeConsole: {}, delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={}, KeyboardLayout={})", command, closeConsole ? "yes" : "no", Configuration::EscDelay,
-                     Configuration::OpenConsoleDelay, Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay, Configuration::KeyboardLayout);
+        logger::info("Executing command: {} (closeConsole: {}, delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={})", command, closeConsole ? "yes" : "no", Configuration::EscDelay,
+                     Configuration::OpenConsoleDelay, Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay);
 
         std::thread([command, closeConsole]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
