@@ -140,17 +140,17 @@ namespace KeyExecutor {
         SendInput(1, &input, sizeof(INPUT));
     }
 
-    // Only QWERTY scan codes (removed AZERTY/QWERTZ)
-    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33},  {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36},  {'k', 37}, {'l', 38}, {'m', 50},
-                                                            {'n', 49}, {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19}, {'s', 31},  {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17},  {'x', 45}, {'y', 21}, {'z', 44},
-                                                            {'0', 11}, {'1', 2},  {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},   {'6', 7},  {'7', 8},  {'8', 9},  {'9', 10},  {' ', 57}, {'.', 52}, {',', 51},
-                                                            {'/', 53}, {'-', 12}, {'_', 12}, {'=', 13}, {';', 39}, {'\'', 40}, {'"', 40}, {'[', 26}, {']', 27}, {'\\', 43}, {'`', 41}};
+    // QWERTY scan codes (added !@#$%^&*()+{}:<>? and _")
+    static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30}, {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18},  {'f', 33}, {'g', 34}, {'h', 35}, {'i', 23}, {'j', 36}, {'k', 37},  {'l', 38}, {'m', 50}, {'n', 49},
+                                                            {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19}, {'s', 31},  {'t', 20}, {'u', 22}, {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21},  {'z', 44}, {'0', 11}, {'1', 2},
+                                                            {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},  {'6', 7},   {'7', 8},  {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51},  {'/', 53}, {'-', 12}, {'_', 12},
+                                                            {'=', 13}, {'+', 13}, {';', 39}, {':', 39}, {'\'', 40}, {'"', 40}, {'[', 26}, {']', 27}, {'{', 26}, {'}', 27}, {'\\', 43}, {'`', 41}, {'!', 2},  {'@', 3},
+                                                            {'#', 4},  {'$', 5},  {'%', 6},  {'^', 7},  {'&', 8},   {'*', 9},  {'(', 10}, {')', 11}, {'<', 51}, {'>', 52}, {'?', 53}};
 
     void SendChar(char c) {
         bool isUpper = std::isupper(static_cast<unsigned char>(c));
         char lowerC = std::tolower(static_cast<unsigned char>(c));
 
-        // Always use QWERTY map now
         auto it = qwertyScan.find(lowerC);
         if (it == qwertyScan.end()) {
             logger::warn("Unsupported character: {}", c);
@@ -158,8 +158,9 @@ namespace KeyExecutor {
         }
         uint32_t scan = it->second;
 
-        // Force Shift for uppercase, underscore, double quote
-        if (isUpper || c == '_' || c == '"') {
+        // Force Shift for uppercase or these special chars
+        if (isUpper || c == '_' || c == '"' || c == '!' || c == '@' || c == '#' || c == '$' || c == '%' || c == '^' || c == '&' || c == '*' || c == '(' || c == ')' || c == '+' || c == '{' || c == '}' || c == ':' || c == '<' || c == '>' ||
+            c == '?') {
             SendKey(42, true);  // LShift down
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -169,7 +170,8 @@ namespace KeyExecutor {
         SendKey(scan, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        if (isUpper || c == '_' || c == '"') {
+        if (isUpper || c == '_' || c == '"' || c == '!' || c == '@' || c == '#' || c == '$' || c == '%' || c == '^' || c == '&' || c == '*' || c == '(' || c == ')' || c == '+' || c == '{' || c == '}' || c == ':' || c == '<' || c == '>' ||
+            c == '?') {
             SendKey(42, false);  // LShift up
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
