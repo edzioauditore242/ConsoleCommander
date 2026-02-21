@@ -18,7 +18,6 @@ namespace Configuration {
 
     inline std::vector<ConsoleCommand> Commands;
     inline bool ShowHiddenGlobal = false;
-    inline bool DebugMode = false;  // New: togglable debug logging
 
     // Adjustable delays (in ms) - loaded from ini
     inline uint32_t EscDelay = 100;
