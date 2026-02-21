@@ -7,12 +7,18 @@ namespace Configuration {
         std::string name;
         std::string command;
         bool closeConsole = true;  // default yes (1)
+        bool isCustom = false;     // true if from custom .ini
+        bool isHidden = false;     // true if name starts with {Hidden}
+        std::string sourcePath;    // full path to custom .ini (empty for main)
 
         ConsoleCommand() = default;
-        ConsoleCommand(const std::string& n, const std::string& cmd, bool close = true) : name(n), command(cmd), closeConsole(close) {}
+        ConsoleCommand(const std::string& n, const std::string& cmd, bool close = true, bool custom = false, bool hidden = false, std::string path = "")
+            : name(n), command(cmd), closeConsole(close), isCustom(custom), isHidden(hidden), sourcePath(path) {}
     };
 
     inline std::vector<ConsoleCommand> Commands;
+    inline bool ShowHiddenGlobal = false;
+    inline bool DebugMode = false;  // New: togglable debug logging
 
     // Adjustable delays (in ms) - loaded from ini
     inline uint32_t EscDelay = 100;
@@ -26,4 +32,5 @@ namespace Configuration {
     void SaveConfiguration();
     void AddCommand(const ConsoleCommand& cmd);
     void RemoveCommand(size_t index);
+    void ToggleHideCommand(size_t index);
 }
