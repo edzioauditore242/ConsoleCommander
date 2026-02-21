@@ -4,10 +4,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 // ============================================
 // Configuration Implementation
@@ -197,6 +201,7 @@ namespace Configuration {
             auto& cmd = Commands[index];
             if (cmd.isCustom) {
                 logger::info("Starting toggle hide for command: {} in {}", cmd.name, cmd.sourcePath);
+
                 std::string oldName = cmd.name;
                 std::string newName = cmd.isHidden ? oldName.substr(8) : "{Hidden}" + oldName;
                 cmd.name = newName;
@@ -210,14 +215,45 @@ namespace Configuration {
                 }
                 inFile.close();
 
-                std::string oldLine = oldName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
-                std::string newLine = newName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
+                // Build clean target for matching (no spaces, no comment)
+                std::string target = oldName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
+                target.erase(std::remove(target.begin(), target.end(), ' '), target.end());
+                target.erase(std::remove(target.begin(), target.end(), '\t'), target.end());
+
+                bool found = false;
 
                 for (auto& l : lines) {
-                    if (l.find(oldLine) != std::string::npos) {
-                        l = newLine;
+                    // Clean copy for comparison
+                    std::string cleaned = l;
+                    cleaned.erase(0, cleaned.find_first_not_of(" \t"));
+                    cleaned.erase(cleaned.find_last_not_of(" \t") + 1);
+
+                    // Remove comment for matching
+                    size_t commentPos = cleaned.find(';');
+                    if (commentPos != std::string::npos) {
+                        cleaned = cleaned.substr(0, commentPos);
+                        cleaned.erase(cleaned.find_last_not_of(" \t") + 1);
+                    }
+
+                    // Remove spaces/tabs for comparison
+                    cleaned.erase(std::remove(cleaned.begin(), cleaned.end(), ' '), cleaned.end());
+                    cleaned.erase(std::remove(cleaned.begin(), cleaned.end(), '\t'), cleaned.end());
+
+                    if (cleaned == target) {
+                        found = true;
+                        // Rebuild line with new name, keep original formatting + comment
+                        size_t firstPipe = l.find('|');
+                        if (firstPipe != std::string::npos) {
+                            std::string before = l.substr(0, l.find_first_not_of(" \t", 0));
+                            std::string after = l.substr(firstPipe);
+                            l = before + newName + after;
+                        }
                         break;
                     }
+                }
+
+                if (!found) {
+                    logger::warn("Could not find matching line to toggle hide for: {} in {}", oldName, cmd.sourcePath);
                 }
 
                 std::ofstream outFile(cmd.sourcePath);
@@ -249,7 +285,6 @@ namespace KeyExecutor {
         SendInput(1, &input, sizeof(INPUT));
     }
 
-    // QWERTY scan codes (added !@#$%^&*()+{}:<>? and _")
     static std::unordered_map<char, uint32_t> qwertyScan = {{'a', 30},  {'b', 48}, {'c', 46}, {'d', 32}, {'e', 18}, {'f', 33}, {'g', 34}, {'h', 35},  {'i', 23}, {'j', 36}, {'k', 37}, {'l', 38}, {'m', 50},
                                                             {'n', 49},  {'o', 24}, {'p', 25}, {'q', 16}, {'r', 19}, {'s', 31}, {'t', 20}, {'u', 22},  {'v', 47}, {'w', 17}, {'x', 45}, {'y', 21}, {'z', 44},
                                                             {'0', 11},  {'1', 2},  {'2', 3},  {'3', 4},  {'4', 5},  {'5', 6},  {'6', 7},  {'7', 8},   {'8', 9},  {'9', 10}, {' ', 57}, {'.', 52}, {',', 51},
@@ -267,10 +302,11 @@ namespace KeyExecutor {
         }
         uint32_t scan = it->second;
 
-        // Force Shift for uppercase or these special chars
-        if (isUpper || c == '_' || c == '"' || c == '!' || c == '@' || c == '#' || c == '$' || c == '%' || c == '^' || c == '&' || c == '*' || c == '(' || c == ')' || c == '+' || c == '{' || c == '}' || c == ':' || c == '<' || c == '>' ||
-            c == '?') {
-            SendKey(42, true);  // LShift down
+        bool needShift = isUpper || c == '_' || c == '"' || c == '!' || c == '@' || c == '#' || c == '$' || c == '%' || c == '^' || c == '&' || c == '*' || c == '(' || c == ')' || c == '+' || c == '{' || c == '}' || c == ':' || c == '<' ||
+                         c == '>' || c == '?';
+
+        if (needShift) {
+            SendKey(42, true);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
@@ -279,9 +315,8 @@ namespace KeyExecutor {
         SendKey(scan, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        if (isUpper || c == '_' || c == '"' || c == '!' || c == '@' || c == '#' || c == '$' || c == '%' || c == '^' || c == '&' || c == '*' || c == '(' || c == ')' || c == '+' || c == '{' || c == '}' || c == ':' || c == '<' || c == '>' ||
-            c == '?') {
-            SendKey(42, false);  // LShift up
+        if (needShift) {
+            SendKey(42, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
@@ -355,7 +390,7 @@ void UI::Register() {
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
     static char newCommandText[1024] = "";
-    static bool closeConsoleChecked = true;  // default yes
+    static bool closeConsoleChecked = true;
 
     void __stdcall Render() {
         ImGuiMCP::Text("Commands:");
@@ -363,7 +398,7 @@ namespace UI::ConsoleCommander {
         if (ImGuiMCP::Button("Add Command")) {
             newCommandName[0] = '\0';
             newCommandText[0] = '\0';
-            closeConsoleChecked = true;  // reset to default yes
+            closeConsoleChecked = true;
             AddCommandWindow->IsOpen = true;
         }
         ImGuiMCP::SameLine();
@@ -386,80 +421,21 @@ namespace UI::ConsoleCommander {
 
         if (Configuration::Commands.empty()) {
             ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No commands configured. Click 'Add Command' to create one.");
-            return;  // Early exit if no commands at all
-        }
+        } else {
+            static ImGuiMCP::ImGuiTableFlags flags = ImGuiMCP::ImGuiTableFlags_Borders | ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_ScrollY;
+            if (ImGuiMCP::BeginTable("CommandTable", 3, flags)) {
+                ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+                ImGuiMCP::TableSetupColumn("Command", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+                ImGuiMCP::TableSetupColumn("Actions", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                ImGuiMCP::TableHeadersRow();
 
-        static ImGuiMCP::ImGuiTableFlags flags = ImGuiMCP::ImGuiTableFlags_Borders | ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_ScrollY;
-        if (ImGuiMCP::BeginTable("CommandTable", 3, flags)) {
-            ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
-            ImGuiMCP::TableSetupColumn("Command", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
-            ImGuiMCP::TableSetupColumn("Actions", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 180.0f);
-            ImGuiMCP::TableHeadersRow();
+                std::string lowerSearch = searchBuffer;
+                std::transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
 
-            std::string lowerSearch = searchBuffer;
-            std::transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
-
-            // Main commands (always shown if any exist)
-            for (size_t i = 0; i < Configuration::Commands.size(); i++) {
-                const auto& cmd = Configuration::Commands[i];
-                if (cmd.isCustom) continue;
-
-                std::string lowerName = cmd.name;
-                std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-                std::string lowerCommand = cmd.command;
-                std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
-
-                if (!lowerSearch.empty() && lowerName.find(lowerSearch) == std::string::npos && lowerCommand.find(lowerSearch) == std::string::npos) {
-                    continue;
-                }
-
-                ImGuiMCP::TableNextRow();
-                ImGuiMCP::TableSetColumnIndex(0);
-                ImGuiMCP::Text(cmd.name.c_str());
-                ImGuiMCP::TableSetColumnIndex(1);
-                ImGuiMCP::Text(cmd.command.c_str());
-                ImGuiMCP::TableSetColumnIndex(2);
-
-                if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                    logger::info("Executing command: {} (full command: {}, closeConsole: {})", cmd.name, cmd.command, cmd.closeConsole ? "yes" : "no");
-                    KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
-                }
-
-                ImGuiMCP::SameLine();
-
-                if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
-                    logger::info("Deleted command: {} (full command: {})", cmd.name, cmd.command);
-                    Configuration::RemoveCommand(i);
-                    break;
-                }
-            }
-
-            // Only draw custom section if there is at least one custom command
-            bool hasCustom = false;
-            for (const auto& cmd : Configuration::Commands) {
-                if (cmd.isCustom) {
-                    hasCustom = true;
-                    break;
-                }
-            }
-
-            if (hasCustom) {
-                // Divider and title for custom commands
-                ImGuiMCP::TableNextRow();
-                ImGuiMCP::TableSetColumnIndex(0);
-                ImGuiMCP::Separator();
-                ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "Custom Commands");
-                ImGuiMCP::TableSetColumnIndex(1);
-                ImGuiMCP::Separator();
-                ImGuiMCP::TableSetColumnIndex(2);
-                ImGuiMCP::Separator();
-
-                // Custom commands loop
+                // Main commands
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
-                    if (!cmd.isCustom) continue;
-
-                    if (cmd.isHidden && !Configuration::ShowHiddenGlobal) continue;
+                    if (cmd.isCustom) continue;
 
                     std::string lowerName = cmd.name;
                     std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
@@ -484,15 +460,82 @@ namespace UI::ConsoleCommander {
 
                     ImGuiMCP::SameLine();
 
-                    std::string hideLabel = cmd.isHidden ? "Unhide##" + std::to_string(i) : "Hide##" + std::to_string(i);
-                    if (ImGuiMCP::Button(hideLabel.c_str())) {
-                        Configuration::ToggleHideCommand(i);
-                        break;  // Safe exit after reload
+                    if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
+                        logger::info("Deleted command: {} (full command: {})", cmd.name, cmd.command);
+                        Configuration::RemoveCommand(i);
+                        break;
                     }
                 }
-            }
 
-            ImGuiMCP::EndTable();
+                // Check if there is at least one visible custom command
+                bool hasVisibleCustom = false;
+                for (size_t i = 0; i < Configuration::Commands.size(); i++) {
+                    const auto& cmd = Configuration::Commands[i];
+                    if (!cmd.isCustom) continue;
+                    if (cmd.isHidden && !Configuration::ShowHiddenGlobal) continue;
+
+                    std::string lowerName = cmd.name;
+                    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                    std::string lowerCommand = cmd.command;
+                    std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
+
+                    if (!lowerSearch.empty() && lowerName.find(lowerSearch) == std::string::npos && lowerCommand.find(lowerSearch) == std::string::npos) {
+                        continue;
+                    }
+
+                    hasVisibleCustom = true;
+                    break;
+                }
+
+                if (hasVisibleCustom) {
+                    ImGuiMCP::TableNextRow();
+                    ImGuiMCP::TableSetColumnIndex(0);
+                    ImGuiMCP::Separator();
+                    ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "Custom Commands");
+                    ImGuiMCP::TableSetColumnIndex(1);
+                    ImGuiMCP::Separator();
+                    ImGuiMCP::TableSetColumnIndex(2);
+                    ImGuiMCP::Separator();
+
+                    for (size_t i = 0; i < Configuration::Commands.size(); i++) {
+                        const auto& cmd = Configuration::Commands[i];
+                        if (!cmd.isCustom) continue;
+
+                        if (cmd.isHidden && !Configuration::ShowHiddenGlobal) continue;
+
+                        std::string lowerName = cmd.name;
+                        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                        std::string lowerCommand = cmd.command;
+                        std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
+
+                        if (!lowerSearch.empty() && lowerName.find(lowerSearch) == std::string::npos && lowerCommand.find(lowerSearch) == std::string::npos) {
+                            continue;
+                        }
+
+                        ImGuiMCP::TableNextRow();
+                        ImGuiMCP::TableSetColumnIndex(0);
+                        ImGuiMCP::Text(cmd.name.c_str());
+                        ImGuiMCP::TableSetColumnIndex(1);
+                        ImGuiMCP::Text(cmd.command.c_str());
+                        ImGuiMCP::TableSetColumnIndex(2);
+
+                        if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
+                            logger::info("Executing command: {} (full command: {}, closeConsole: {})", cmd.name, cmd.command, cmd.closeConsole ? "yes" : "no");
+                            KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
+                        }
+
+                        ImGuiMCP::SameLine();
+
+                        std::string hideLabel = cmd.isHidden ? "Unhide##" + std::to_string(i) : "Hide##" + std::to_string(i);
+                        if (ImGuiMCP::Button(hideLabel.c_str())) {
+                            Configuration::ToggleHideCommand(i);
+                            break;
+                        }
+                    }
+                }
+
+                ImGuiMCP::EndTable();
+            }
         }
     }
 
