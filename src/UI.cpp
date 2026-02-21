@@ -9,8 +9,6 @@
 #include <thread>
 #include <unordered_map>
 
-#pragma warning(disable : 5053)  // suppress fmt constexpr warning
-
 // ============================================
 // Configuration Implementation
 // ============================================
