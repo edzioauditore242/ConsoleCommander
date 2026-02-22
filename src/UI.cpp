@@ -651,7 +651,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Example:\nCommand1,Command2,Command3");
+        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Multiple Command Example:\nCommand1,Command2,Command3");
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
