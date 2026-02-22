@@ -4,10 +4,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 // ============================================
 // Configuration Implementation
@@ -258,13 +262,6 @@ namespace Configuration {
                         std::string parsedCmd;
                         bool parsedClose = true;
                         std::string parsedTooltip;
-                        std::string commentPart;
-                        size_t commentPos = parsedLine.find(';');
-                        if (commentPos != std::string::npos) {
-                            commentPart = parsedLine.substr(commentPos);
-                            parsedLine = parsedLine.substr(0, commentPos);
-                        }
-
                         if (pos2 != std::string::npos) {
                             parsedCmd = parsedLine.substr(pos1 + 1, pos2 - pos1 - 1);
                             size_t pos3 = parsedLine.find('|', pos2 + 1);
@@ -294,13 +291,10 @@ namespace Configuration {
                             found = true;
                             logger::info("Found matching line: {}", l);
 
-                            // Reconstruct new line with new name
+                            // Reconstruct new line
                             std::string newLine = newName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
                             if (!cmd.tooltip.empty()) {
                                 newLine += "|" + cmd.tooltip;
-                            }
-                            if (!commentPart.empty()) {
-                                newLine += commentPart;
                             }
 
                             l = newLine;
@@ -601,7 +595,7 @@ namespace UI::ConsoleCommander {
                         std::string hideLabel = cmd.isHidden ? "Unhide##" + std::to_string(i) : "Hide##" + std::to_string(i);
                         if (ImGuiMCP::Button(hideLabel.c_str())) {
                             Configuration::ToggleHideCommand(i);
-                            break;  // Safe exit after reload
+                            break;
                         }
                     }
                 }
