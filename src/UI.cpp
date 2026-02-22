@@ -4,14 +4,10 @@
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <memory>
-#include <string>
 #include <thread>
 #include <unordered_map>
-#include <vector>
 
 // ============================================
 // Configuration Implementation
@@ -71,20 +67,33 @@ namespace Configuration {
                         size_t pos2 = line.find('|', pos1 + 1);
                         std::string cmdStr;
                         bool close = true;
+                        std::string tooltipStr;
                         if (pos2 != std::string::npos) {
                             cmdStr = line.substr(pos1 + 1, pos2 - pos1 - 1);
-                            std::string closeStr = line.substr(pos2 + 1);
-                            if (!closeStr.empty()) {
-                                try {
-                                    close = (std::stoi(closeStr) != 0);
-                                } catch (...) {
+                            size_t pos3 = line.find('|', pos2 + 1);
+                            if (pos3 != std::string::npos) {
+                                std::string closeStr = line.substr(pos2 + 1, pos3 - pos2 - 1);
+                                tooltipStr = line.substr(pos3 + 1);
+                                if (!closeStr.empty()) {
+                                    try {
+                                        close = (std::stoi(closeStr) != 0);
+                                    } catch (...) {
+                                    }
+                                }
+                            } else {
+                                std::string closeStr = line.substr(pos2 + 1);
+                                if (!closeStr.empty()) {
+                                    try {
+                                        close = (std::stoi(closeStr) != 0);
+                                    } catch (...) {
+                                    }
                                 }
                             }
                         } else {
                             cmdStr = line.substr(pos1 + 1);
                         }
                         bool hidden = (name.find("{Hidden}") == 0);
-                        Commands.push_back(ConsoleCommand(name, cmdStr, close, false, hidden, ""));
+                        Commands.push_back(ConsoleCommand(name, cmdStr, close, false, hidden, "", tooltipStr));
                         mainLoaded++;
                     }
                 }
@@ -126,20 +135,33 @@ namespace Configuration {
                                     size_t pos2 = line.find('|', pos1 + 1);
                                     std::string cmd;
                                     bool close = true;
+                                    std::string tooltipStr;
                                     if (pos2 != std::string::npos) {
                                         cmd = line.substr(pos1 + 1, pos2 - pos1 - 1);
-                                        std::string closeStr = line.substr(pos2 + 1);
-                                        if (!closeStr.empty()) {
-                                            try {
-                                                close = (std::stoi(closeStr) != 0);
-                                            } catch (...) {
+                                        size_t pos3 = line.find('|', pos2 + 1);
+                                        if (pos3 != std::string::npos) {
+                                            std::string closeStr = line.substr(pos2 + 1, pos3 - pos2 - 1);
+                                            tooltipStr = line.substr(pos3 + 1);
+                                            if (!closeStr.empty()) {
+                                                try {
+                                                    close = (std::stoi(closeStr) != 0);
+                                                } catch (...) {
+                                                }
+                                            }
+                                        } else {
+                                            std::string closeStr = line.substr(pos2 + 1);
+                                            if (!closeStr.empty()) {
+                                                try {
+                                                    close = (std::stoi(closeStr) != 0);
+                                                } catch (...) {
+                                                }
                                             }
                                         }
                                     } else {
                                         cmd = line.substr(pos1 + 1);
                                     }
                                     bool hidden = (name.find("{Hidden}") == 0);
-                                    Commands.push_back(ConsoleCommand(name, cmd, close, true, hidden, path));
+                                    Commands.push_back(ConsoleCommand(name, cmd, close, true, hidden, path, tooltipStr));
                                     customInThisFile++;
                                     totalCustom++;
                                 }
@@ -174,10 +196,14 @@ namespace Configuration {
         file << "EnterDelay=" << EnterDelay << "\n";
         file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
         file << "[ConsoleCommands]\n";
-        file << "; Format: Name|ConsoleCommand|CloseConsole (1=yes, 0=no)\n";
+        file << "; Format: Name|ConsoleCommand|CloseConsole (1=yes, 0=no)|Tooltip (optional)\n";
         for (const auto& cmd : Commands) {
             if (!cmd.isCustom) {
-                file << cmd.name << "|" << cmd.command << "|" << (cmd.closeConsole ? "1" : "0") << "\n";
+                file << cmd.name << "|" << cmd.command << "|" << (cmd.closeConsole ? "1" : "0");
+                if (!cmd.tooltip.empty()) {
+                    file << "|" << cmd.tooltip;
+                }
+                file << "\n";
             }
         }
         file.close();
@@ -215,45 +241,77 @@ namespace Configuration {
                 }
                 inFile.close();
 
-                // Build clean target for matching (no spaces, no comment)
-                std::string target = oldName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
-                target.erase(std::remove(target.begin(), target.end(), ' '), target.end());
-                target.erase(std::remove(target.begin(), target.end(), '\t'), target.end());
-
                 bool found = false;
 
                 for (auto& l : lines) {
-                    // Clean copy for comparison
-                    std::string cleaned = l;
-                    cleaned.erase(0, cleaned.find_first_not_of(" \t"));
-                    cleaned.erase(cleaned.find_last_not_of(" \t") + 1);
+                    std::string parsedLine = l;
+                    parsedLine.erase(std::remove(parsedLine.begin(), parsedLine.end(), '\r'), parsedLine.end());
+                    parsedLine.erase(0, parsedLine.find_first_not_of(" \t"));
+                    parsedLine.erase(parsedLine.find_last_not_of(" \t") + 1, std::string::npos);
 
-                    // Remove comment for matching
-                    size_t commentPos = cleaned.find(';');
-                    if (commentPos != std::string::npos) {
-                        cleaned = cleaned.substr(0, commentPos);
-                        cleaned.erase(cleaned.find_last_not_of(" \t") + 1);
-                    }
+                    if (parsedLine.empty() || parsedLine[0] == ';' || parsedLine[0] == '#' || parsedLine[0] == '[') continue;
 
-                    // Remove spaces/tabs for comparison
-                    cleaned.erase(std::remove(cleaned.begin(), cleaned.end(), ' '), cleaned.end());
-                    cleaned.erase(std::remove(cleaned.begin(), cleaned.end(), '\t'), cleaned.end());
-
-                    if (cleaned == target) {
-                        found = true;
-                        // Rebuild line with new name, keep original formatting + comment
-                        size_t firstPipe = l.find('|');
-                        if (firstPipe != std::string::npos) {
-                            std::string before = l.substr(0, l.find_first_not_of(" \t", 0));
-                            std::string after = l.substr(firstPipe);
-                            l = before + newName + after;
+                    size_t pos1 = parsedLine.find('|');
+                    if (pos1 != std::string::npos) {
+                        std::string parsedName = parsedLine.substr(0, pos1);
+                        size_t pos2 = parsedLine.find('|', pos1 + 1);
+                        std::string parsedCmd;
+                        bool parsedClose = true;
+                        std::string parsedTooltip;
+                        std::string commentPart;
+                        size_t commentPos = parsedLine.find(';');
+                        if (commentPos != std::string::npos) {
+                            commentPart = parsedLine.substr(commentPos);
+                            parsedLine = parsedLine.substr(0, commentPos);
                         }
-                        break;
+
+                        if (pos2 != std::string::npos) {
+                            parsedCmd = parsedLine.substr(pos1 + 1, pos2 - pos1 - 1);
+                            size_t pos3 = parsedLine.find('|', pos2 + 1);
+                            if (pos3 != std::string::npos) {
+                                std::string closeStr = parsedLine.substr(pos2 + 1, pos3 - pos2 - 1);
+                                parsedTooltip = parsedLine.substr(pos3 + 1);
+                                if (!closeStr.empty()) {
+                                    try {
+                                        parsedClose = (std::stoi(closeStr) != 0);
+                                    } catch (...) {
+                                    }
+                                }
+                            } else {
+                                std::string closeStr = parsedLine.substr(pos2 + 1);
+                                if (!closeStr.empty()) {
+                                    try {
+                                        parsedClose = (std::stoi(closeStr) != 0);
+                                    } catch (...) {
+                                    }
+                                }
+                            }
+                        } else {
+                            parsedCmd = parsedLine.substr(pos1 + 1);
+                        }
+
+                        if (parsedName == oldName && parsedCmd == cmd.command && parsedClose == cmd.closeConsole && parsedTooltip == cmd.tooltip) {
+                            found = true;
+                            logger::info("Found matching line: {}", l);
+
+                            // Reconstruct new line with new name
+                            std::string newLine = newName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
+                            if (!cmd.tooltip.empty()) {
+                                newLine += "|" + cmd.tooltip;
+                            }
+                            if (!commentPart.empty()) {
+                                newLine += commentPart;
+                            }
+
+                            l = newLine;
+                            logger::info("Rewrote line to: {}", l);
+                            break;
+                        }
                     }
                 }
 
                 if (!found) {
-                    logger::warn("Could not find matching line to toggle hide for: {} in {}", oldName, cmd.sourcePath);
+                    logger::warn("No matching line found for toggle hide: {} in {}", oldName, cmd.sourcePath);
                 }
 
                 std::ofstream outFile(cmd.sourcePath);
@@ -390,7 +448,7 @@ void UI::Register() {
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
     static char newCommandText[1024] = "";
-    static bool closeConsoleChecked = true;
+    static bool closeConsoleChecked = true;  // default yes
 
     void __stdcall Render() {
         ImGuiMCP::Text("Commands:");
@@ -398,7 +456,7 @@ namespace UI::ConsoleCommander {
         if (ImGuiMCP::Button("Add Command")) {
             newCommandName[0] = '\0';
             newCommandText[0] = '\0';
-            closeConsoleChecked = true;
+            closeConsoleChecked = true;  // reset to default yes
             AddCommandWindow->IsOpen = true;
         }
         ImGuiMCP::SameLine();
@@ -459,6 +517,12 @@ namespace UI::ConsoleCommander {
                     }
 
                     ImGuiMCP::SameLine();
+
+                    if (!cmd.tooltip.empty() && ImGuiMCP::IsItemHovered()) {
+                        ImGuiMCP::BeginTooltip();
+                        ImGuiMCP::TextUnformatted(cmd.tooltip.c_str());
+                        ImGuiMCP::EndTooltip();
+                    }
 
                     if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
                         logger::info("Deleted command: {} (full command: {})", cmd.name, cmd.command);
@@ -526,10 +590,18 @@ namespace UI::ConsoleCommander {
 
                         ImGuiMCP::SameLine();
 
+                        if (!cmd.tooltip.empty() && ImGuiMCP::IsItemHovered()) {
+                            ImGuiMCP::BeginTooltip();
+                            ImGuiMCP::TextUnformatted(cmd.tooltip.c_str());
+                            ImGuiMCP::EndTooltip();
+                        }
+
+                        ImGuiMCP::SameLine();
+
                         std::string hideLabel = cmd.isHidden ? "Unhide##" + std::to_string(i) : "Hide##" + std::to_string(i);
                         if (ImGuiMCP::Button(hideLabel.c_str())) {
                             Configuration::ToggleHideCommand(i);
-                            break;
+                            break;  // Safe exit after reload
                         }
                     }
                 }
@@ -570,16 +642,25 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Separator();
         ImGuiMCP::Spacing();
 
+        ImGuiMCP::Text("Tooltip (optional - shown on hover over Execute):");
+        static char tooltipBuffer[512] = "";
+        ImGuiMCP::InputText("##Tooltip", tooltipBuffer, sizeof(tooltipBuffer));
+
+        ImGuiMCP::Spacing();
+        ImGuiMCP::Separator();
+        ImGuiMCP::Spacing();
+
         bool canAdd = strlen(newCommandName) > 0 && strlen(newCommandText) > 0;
         if (!canAdd) {
             ImGuiMCP::PushStyleVar(ImGuiMCP::ImGuiStyleVar_Alpha, 0.5f);
         }
 
         if (ImGuiMCP::Button("Add Command") && canAdd) {
-            Configuration::ConsoleCommand newCmd(newCommandName, newCommandText, closeConsoleChecked, false, false, "");
-            logger::info("Added new command: {} (full command: {}, closeConsole: {})", newCmd.name, newCmd.command, newCmd.closeConsole ? "yes" : "no");
+            Configuration::ConsoleCommand newCmd(newCommandName, newCommandText, closeConsoleChecked, false, false, "", tooltipBuffer);
+            logger::info("Added new command: {} (full command: {}, closeConsole: {}, tooltip: {})", newCmd.name, newCmd.command, newCmd.closeConsole ? "yes" : "no", newCmd.tooltip.empty() ? "none" : newCmd.tooltip);
             Configuration::AddCommand(newCmd);
             AddCommandWindow->IsOpen = false;
+            tooltipBuffer[0] = '\0';
         }
 
         if (!canAdd) {
@@ -590,6 +671,7 @@ namespace UI::ConsoleCommander {
 
         if (ImGuiMCP::Button("Cancel")) {
             AddCommandWindow->IsOpen = false;
+            tooltipBuffer[0] = '\0';
         }
 
         ImGuiMCP::End();

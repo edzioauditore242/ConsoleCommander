@@ -10,10 +10,11 @@ namespace Configuration {
         bool isCustom = false;     // true if from custom .ini
         bool isHidden = false;     // true if name starts with {Hidden}
         std::string sourcePath;    // full path to custom .ini (empty for main)
+        std::string tooltip;       // NEW: optional tooltip text
 
         ConsoleCommand() = default;
-        ConsoleCommand(const std::string& n, const std::string& cmd, bool close = true, bool custom = false, bool hidden = false, std::string path = "")
-            : name(n), command(cmd), closeConsole(close), isCustom(custom), isHidden(hidden), sourcePath(path) {}
+        ConsoleCommand(const std::string& n, const std::string& cmd, bool close = true, bool custom = false, bool hidden = false, std::string path = "", std::string tip = "")
+            : name(n), command(cmd), closeConsole(close), isCustom(custom), isHidden(hidden), sourcePath(path), tooltip(tip) {}
     };
 
     inline std::vector<ConsoleCommand> Commands;
