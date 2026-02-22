@@ -8,13 +8,14 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 // ============================================
-// Configuration Implementation
+// Configuration Implementation (unchanged)
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
@@ -106,7 +107,7 @@ namespace Configuration {
             logger::info("Loaded {} commands from main ini", mainLoaded);
         }
 
-        // Scan for custom .ini files
+        // Scan for custom .ini files (unchanged)
         std::string customFolder = "Data\\SKSE\\Plugins\\ConsoleCommander";
         logger::info("Checking custom folder: {}", customFolder);
         int totalCustom = 0;
@@ -200,7 +201,7 @@ namespace Configuration {
         file << "EnterDelay=" << EnterDelay << "\n";
         file << "CloseConsoleDelay=" << CloseConsoleDelay << "\n\n";
         file << "[ConsoleCommands]\n";
-        file << "; Format: Name|ConsoleCommand|CloseConsole (1=yes, 0=no)|Tooltip (optional)\n";
+        file << "; Format: Name|Command1,Command2,...|CloseConsole (1=yes, 0=no)|Tooltip (optional)\n";
         for (const auto& cmd : Commands) {
             if (!cmd.isCustom) {
                 file << cmd.name << "|" << cmd.command << "|" << (cmd.closeConsole ? "1" : "0");
@@ -291,7 +292,6 @@ namespace Configuration {
                             found = true;
                             logger::info("Found matching line: {}", l);
 
-                            // Reconstruct new line
                             std::string newLine = newName + "|" + cmd.command + "|" + (cmd.closeConsole ? "1" : "0");
                             if (!cmd.tooltip.empty()) {
                                 newLine += "|" + cmd.tooltip;
@@ -322,7 +322,7 @@ namespace Configuration {
 }
 
 // ============================================
-// Key Executor Implementation
+// Key Executor Implementation (unchanged)
 // ============================================
 namespace KeyExecutor {
     void SendKey(uint32_t dxCode, bool down) {
@@ -377,7 +377,24 @@ namespace KeyExecutor {
         logger::info("Executing command: {} (closeConsole: {}, delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={})", command, closeConsole ? "yes" : "no", Configuration::EscDelay,
                      Configuration::OpenConsoleDelay, Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay);
 
-        std::thread([command, closeConsole]() {
+        // Split by comma for multi-command support
+        std::vector<std::string> cmds;
+        std::istringstream iss(command);
+        std::string cmdPart;
+        while (std::getline(iss, cmdPart, ',')) {
+            cmdPart.erase(0, cmdPart.find_first_not_of(" \t"));
+            cmdPart.erase(cmdPart.find_last_not_of(" \t") + 1);
+            if (!cmdPart.empty()) {
+                cmds.push_back(cmdPart);
+            }
+        }
+
+        if (cmds.empty()) {
+            logger::warn("No valid commands to execute");
+            return;
+        }
+
+        std::thread([cmds, closeConsole]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EscDelay));
@@ -400,18 +417,23 @@ namespace KeyExecutor {
 
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::TypingStartDelay));
+            for (size_t i = 0; i < cmds.size(); ++i) {
+                const std::string& cmd = cmds[i];
+                logger::info("Executing command {} of {}: {}", i + 1, cmds.size(), cmd);
 
-            for (char c : command) {
-                SendChar(c);
-                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));
+                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::TypingStartDelay));
+
+                for (char c : cmd) {
+                    SendChar(c);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CharDelay));
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
+
+                SendKey(28, true);  // Enter
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                SendKey(28, false);
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::EnterDelay));
-
-            SendKey(28, true);  // Enter
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            SendKey(28, false);
 
             if (closeConsole) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(Configuration::CloseConsoleDelay));
@@ -441,8 +463,8 @@ void UI::Register() {
 
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
-    static char newCommandText[1024] = "";
-    static bool closeConsoleChecked = true;  // default yes
+    static char newCommandText[4096] = "";  // large buffer for multiple commands
+    static bool closeConsoleChecked = true;
 
     void __stdcall Render() {
         ImGuiMCP::Text("Commands:");
@@ -450,7 +472,7 @@ namespace UI::ConsoleCommander {
         if (ImGuiMCP::Button("Add Command")) {
             newCommandName[0] = '\0';
             newCommandText[0] = '\0';
-            closeConsoleChecked = true;  // reset to default yes
+            closeConsoleChecked = true;
             AddCommandWindow->IsOpen = true;
         }
         ImGuiMCP::SameLine();
@@ -484,13 +506,13 @@ namespace UI::ConsoleCommander {
                 std::string lowerSearch = searchBuffer;
                 std::transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
 
-                // Main commands
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
                     if (cmd.isCustom) continue;
 
                     std::string lowerName = cmd.name;
                     std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+
                     std::string lowerCommand = cmd.command;
                     std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
 
@@ -506,7 +528,7 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::TableSetColumnIndex(2);
 
                     if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                        logger::info("Executing command: {} (full command: {}, closeConsole: {})", cmd.name, cmd.command, cmd.closeConsole ? "yes" : "no");
+                        logger::info("Executing command: {}", cmd.name);
                         KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
                     }
 
@@ -519,13 +541,13 @@ namespace UI::ConsoleCommander {
                     }
 
                     if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
-                        logger::info("Deleted command: {} (full command: {})", cmd.name, cmd.command);
+                        logger::info("Deleted command: {}", cmd.name);
                         Configuration::RemoveCommand(i);
                         break;
                     }
                 }
 
-                // Check if there is at least one visible custom command
+                // Custom commands section
                 bool hasVisibleCustom = false;
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
@@ -534,6 +556,7 @@ namespace UI::ConsoleCommander {
 
                     std::string lowerName = cmd.name;
                     std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+
                     std::string lowerCommand = cmd.command;
                     std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
 
@@ -563,6 +586,7 @@ namespace UI::ConsoleCommander {
 
                         std::string lowerName = cmd.name;
                         std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+
                         std::string lowerCommand = cmd.command;
                         std::transform(lowerCommand.begin(), lowerCommand.end(), lowerCommand.begin(), ::tolower);
 
@@ -578,7 +602,7 @@ namespace UI::ConsoleCommander {
                         ImGuiMCP::TableSetColumnIndex(2);
 
                         if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                            logger::info("Executing command: {} (full command: {}, closeConsole: {})", cmd.name, cmd.command, cmd.closeConsole ? "yes" : "no");
+                            logger::info("Executing command: {}", cmd.name);
                             KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
                         }
 
@@ -623,8 +647,11 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::InputText("Command Name", newCommandName, sizeof(newCommandName));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::Text("Console Command:");
+        ImGuiMCP::Text("Console Commands (separate multiple with comma):");
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
+        ImGuiMCP::Spacing();
+
+        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Example:\nCommand1,Command2,Command3");
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
@@ -646,7 +673,7 @@ namespace UI::ConsoleCommander {
 
         bool canAdd = strlen(newCommandName) > 0 && strlen(newCommandText) > 0;
         if (!canAdd) {
-            ImGuiMCP::PushStyleVar(ImGuiMCP::ImGuiStyleVar_Alpha, 0.5f);
+            ImGuiMCP::BeginDisabled();
         }
 
         if (ImGuiMCP::Button("Add Command") && canAdd) {
@@ -654,17 +681,19 @@ namespace UI::ConsoleCommander {
             logger::info("Added new command: {} (full command: {}, closeConsole: {}, tooltip: {})", newCmd.name, newCmd.command, newCmd.closeConsole ? "yes" : "no", newCmd.tooltip.empty() ? "none" : newCmd.tooltip);
             Configuration::AddCommand(newCmd);
             AddCommandWindow->IsOpen = false;
+            newCommandText[0] = '\0';
             tooltipBuffer[0] = '\0';
         }
 
         if (!canAdd) {
-            ImGuiMCP::PopStyleVar();
+            ImGuiMCP::EndDisabled();
         }
 
         ImGuiMCP::SameLine();
 
         if (ImGuiMCP::Button("Cancel")) {
             AddCommandWindow->IsOpen = false;
+            newCommandText[0] = '\0';
             tooltipBuffer[0] = '\0';
         }
 
