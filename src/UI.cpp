@@ -107,7 +107,7 @@ namespace Configuration {
             logger::info("Loaded {} commands from main ini", mainLoaded);
         }
 
-        // Scan for custom .ini files (unchanged)
+        // Scan for custom .ini files
         std::string customFolder = "Data\\SKSE\\Plugins\\ConsoleCommander";
         logger::info("Checking custom folder: {}", customFolder);
         int totalCustom = 0;
@@ -568,7 +568,7 @@ namespace UI::ConsoleCommander {
                     }
                 }
 
-                // Custom commands section (unchanged from your original)
+                // Custom commands section
                 bool hasVisibleCustom = false;
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
