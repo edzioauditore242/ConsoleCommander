@@ -15,7 +15,7 @@
 #include <vector>
 
 // ============================================
-// Configuration Implementation (unchanged)
+// Configuration Implementation
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
@@ -537,7 +537,27 @@ namespace UI::ConsoleCommander {
 
                     if (!cmd.tooltip.empty() && ImGuiMCP::IsItemHovered()) {
                         ImGuiMCP::BeginTooltip();
-                        ImGuiMCP::TextUnformatted(cmd.tooltip.c_str());
+                        std::string tooltip = cmd.tooltip;
+                        std::istringstream iss(tooltip);
+                        std::string word;
+                        std::string line;
+                        int wordCount = 0;
+
+                        while (iss >> word) {
+                            if (wordCount > 0) line += " ";
+                            line += word;
+                            wordCount++;
+
+                            if (wordCount >= 17) {
+                                ImGuiMCP::TextUnformatted(line.c_str());
+                                line = "";
+                                wordCount = 0;
+                            }
+                        }
+
+                        if (!line.empty()) {
+                            ImGuiMCP::TextUnformatted(line.c_str());
+                        }
                         ImGuiMCP::EndTooltip();
                     }
 
@@ -548,7 +568,7 @@ namespace UI::ConsoleCommander {
                     }
                 }
 
-                // Custom commands section
+                // Custom commands section (unchanged from your original)
                 bool hasVisibleCustom = false;
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
@@ -611,7 +631,27 @@ namespace UI::ConsoleCommander {
 
                         if (!cmd.tooltip.empty() && ImGuiMCP::IsItemHovered()) {
                             ImGuiMCP::BeginTooltip();
-                            ImGuiMCP::TextUnformatted(cmd.tooltip.c_str());
+                            std::string tooltip = cmd.tooltip;
+                            std::istringstream iss(tooltip);
+                            std::string word;
+                            std::string line;
+                            int wordCount = 0;
+
+                            while (iss >> word) {
+                                if (wordCount > 0) line += " ";
+                                line += word;
+                                wordCount++;
+
+                                if (wordCount >= 17) {
+                                    ImGuiMCP::TextUnformatted(line.c_str());
+                                    line = "";
+                                    wordCount = 0;
+                                }
+                            }
+
+                            if (!line.empty()) {
+                                ImGuiMCP::TextUnformatted(line.c_str());
+                            }
                             ImGuiMCP::EndTooltip();
                         }
 
@@ -652,7 +692,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Multiple Command Example:\nCommand1,Command2,Command3");
+        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "MultiCommand Example: Command1,Command2,Command3");
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
