@@ -322,7 +322,7 @@ namespace Configuration {
 }
 
 // ============================================
-// Key Executor Implementation (unchanged)
+// Key Executor Implementation
 // ============================================
 namespace KeyExecutor {
     void SendKey(uint32_t dxCode, bool down) {
@@ -463,7 +463,7 @@ void UI::Register() {
 
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
-    static char newCommandText[4096] = "";  // large buffer for multiple commands
+    static char newCommandText[4096] = "";
     static bool closeConsoleChecked = true;
 
     void __stdcall Render() {
