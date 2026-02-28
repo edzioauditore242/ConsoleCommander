@@ -321,7 +321,7 @@ namespace Configuration {
 }
 
 // ============================================
-// Key Executor Implementation (unchanged)
+// Key Executor Implementation
 // ============================================
 namespace KeyExecutor {
     void SendKey(uint32_t dxCode, bool down) {
@@ -734,21 +734,17 @@ namespace UI::ConsoleCommander {
             AddCommandWindow->IsOpen = false;
         }
 
-        ImGuiMCP::Text("Configure a new command:");
-        ImGuiMCP::Separator();
-        ImGuiMCP::Spacing();
-
         ImGuiMCP::InputText("Command Name", newCommandName, sizeof(newCommandName));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::Text("Console Commands (separate multiple with comma):");
+        ImGuiMCP::Text("Console Commands:");
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
         ImGuiMCP::Spacing();
 
         ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "MultiCommand Example: Command1,Command2,Command3");
 
         ImGuiMCP::Spacing();
-        ImGuiMCP::Checkbox("Variable Command (adds [#] for value prompt)", &isVariableCommand);
+        ImGuiMCP::Checkbox("Variable Command [Ex: pleyer.additem f (without value)]", &isVariableCommand);
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
