@@ -15,7 +15,7 @@
 #include <vector>
 
 // ============================================
-// Configuration Implementation (unchanged)
+// Configuration Implementation
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
@@ -463,17 +463,23 @@ void UI::Register() {
 
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
-    static char newCommandText[4096] = "";
+    static char newCommandText[4096] = "";  // large buffer for multiple commands
     static bool closeConsoleChecked = true;
-    static bool isVariableCommand = false;  // NEW: Variable Command checkbox
+    static bool isVariableCommand = false;  // Variable Command checkbox
 
-    // NEW: Variable input popup
+    // Variable input popup
     static bool showVariablePopup = false;
-    static std::string pendingCommand;
-    static std::string pendingName;
+    static std::string pendingCommand = "";
+    static bool pendingCloseConsole = true;
     static char variableValue[256] = "";
 
     void __stdcall Render() {
+        // Clear variable popup if no pending command (menu reopened after close)
+        if (showVariablePopup && pendingCommand.empty()) {
+            showVariablePopup = false;
+            variableValue[0] = '\0';
+        }
+
         ImGuiMCP::Text("Commands:");
         ImGuiMCP::SameLine();
         if (ImGuiMCP::Button("Add Command")) {
@@ -538,7 +544,7 @@ namespace UI::ConsoleCommander {
                     if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
                         if (cmd.command.find("[#]") != std::string::npos) {
                             pendingCommand = cmd.command;
-                            pendingName = cmd.name;
+                            pendingCloseConsole = cmd.closeConsole;
                             showVariablePopup = true;
                             variableValue[0] = '\0';
                         } else {
@@ -639,7 +645,7 @@ namespace UI::ConsoleCommander {
                         if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
                             if (cmd.command.find("[#]") != std::string::npos) {
                                 pendingCommand = cmd.command;
-                                pendingName = cmd.name;
+                                pendingCloseConsole = cmd.closeConsole;
                                 showVariablePopup = true;
                                 variableValue[0] = '\0';
                             } else {
@@ -690,15 +696,13 @@ namespace UI::ConsoleCommander {
             }
         }
 
-        // NEW: Variable Input Popup
+        // Variable Input Popup
         if (showVariablePopup) {
             ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(ImGuiMCP::GetMainViewport()->Size.x * 0.5f, ImGuiMCP::GetMainViewport()->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
             ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(400, 180), ImGuiMCP::ImGuiCond_Appearing);
 
-            ImGuiMCP::Begin("Enter Variable Value", &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
+            ImGuiMCP::Begin("Enter Variable Value##ConsoleCommander", &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
 
-            ImGuiMCP::Text("Command: %s", pendingName.c_str());
-            ImGuiMCP::Spacing();
             ImGuiMCP::InputText("Value", variableValue, sizeof(variableValue));
             ImGuiMCP::Spacing();
 
@@ -710,13 +714,17 @@ namespace UI::ConsoleCommander {
                     pos += strlen(variableValue);
                 }
                 logger::info("Variable replaced - executing: {}", finalCmd);
-                KeyExecutor::ExecuteCommand(finalCmd, true);
+                KeyExecutor::ExecuteCommand(finalCmd, pendingCloseConsole);
                 showVariablePopup = false;
+                pendingCommand = "";
+                variableValue[0] = '\0';
             }
 
             ImGuiMCP::SameLine();
             if (ImGuiMCP::Button("Cancel")) {
                 showVariablePopup = false;
+                pendingCommand = "";
+                variableValue[0] = '\0';
             }
 
             ImGuiMCP::End();
@@ -748,7 +756,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Example: Command1,Command2,Command3");
 
         ImGuiMCP::Spacing();
-        ImGuiMCP::Checkbox("Variable Command (will prompt for value when executed)", &isVariableCommand);
+        ImGuiMCP::Checkbox("Variable Command (adds [#] for value prompt)", &isVariableCommand);
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
