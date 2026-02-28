@@ -15,7 +15,7 @@
 #include <vector>
 
 // ============================================
-// Configuration Implementation
+// Configuration Implementation (unchanged)
 // ============================================
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
@@ -107,7 +107,7 @@ namespace Configuration {
             logger::info("Loaded {} commands from main ini", mainLoaded);
         }
 
-        // Scan for custom .ini files
+        // Scan for custom .ini files (unchanged)
         std::string customFolder = "Data\\SKSE\\Plugins\\ConsoleCommander";
         logger::info("Checking custom folder: {}", customFolder);
         int totalCustom = 0;
@@ -322,7 +322,7 @@ namespace Configuration {
 }
 
 // ============================================
-// Key Executor Implementation
+// Key Executor Implementation (unchanged)
 // ============================================
 namespace KeyExecutor {
     void SendKey(uint32_t dxCode, bool down) {
@@ -465,6 +465,13 @@ namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
     static char newCommandText[4096] = "";
     static bool closeConsoleChecked = true;
+    static bool isVariableCommand = false;  // NEW: Variable Command checkbox
+
+    // NEW: Variable input popup
+    static bool showVariablePopup = false;
+    static std::string pendingCommand;
+    static std::string pendingName;
+    static char variableValue[256] = "";
 
     void __stdcall Render() {
         ImGuiMCP::Text("Commands:");
@@ -473,6 +480,7 @@ namespace UI::ConsoleCommander {
             newCommandName[0] = '\0';
             newCommandText[0] = '\0';
             closeConsoleChecked = true;
+            isVariableCommand = false;
             AddCommandWindow->IsOpen = true;
         }
         ImGuiMCP::SameLine();
@@ -489,7 +497,6 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Text("Search:");
         ImGuiMCP::SameLine();
         static char searchBuffer[256] = "";
-        ImGuiMCP::SetNextItemWidth(-1.0f);
         ImGuiMCP::InputText("##Search", searchBuffer, sizeof(searchBuffer));
 
         ImGuiMCP::Separator();
@@ -529,8 +536,15 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::TableSetColumnIndex(2);
 
                     if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                        logger::info("Executing command: {}", cmd.name);
-                        KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
+                        if (cmd.command.find("[#]") != std::string::npos) {
+                            pendingCommand = cmd.command;
+                            pendingName = cmd.name;
+                            showVariablePopup = true;
+                            variableValue[0] = '\0';
+                        } else {
+                            logger::info("Executing command: {}", cmd.name);
+                            KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
+                        }
                     }
 
                     ImGuiMCP::SameLine();
@@ -568,7 +582,7 @@ namespace UI::ConsoleCommander {
                     }
                 }
 
-                // Custom commands section
+                // Custom commands section (unchanged)
                 bool hasVisibleCustom = false;
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
@@ -623,8 +637,15 @@ namespace UI::ConsoleCommander {
                         ImGuiMCP::TableSetColumnIndex(2);
 
                         if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
-                            logger::info("Executing command: {}", cmd.name);
-                            KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
+                            if (cmd.command.find("[#]") != std::string::npos) {
+                                pendingCommand = cmd.command;
+                                pendingName = cmd.name;
+                                showVariablePopup = true;
+                                variableValue[0] = '\0';
+                            } else {
+                                logger::info("Executing command: {}", cmd.name);
+                                KeyExecutor::ExecuteCommand(cmd.command, cmd.closeConsole);
+                            }
                         }
 
                         ImGuiMCP::SameLine();
@@ -668,6 +689,38 @@ namespace UI::ConsoleCommander {
                 ImGuiMCP::EndTable();
             }
         }
+
+        // NEW: Variable Input Popup
+        if (showVariablePopup) {
+            ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(ImGuiMCP::GetMainViewport()->Size.x * 0.5f, ImGuiMCP::GetMainViewport()->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
+            ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(400, 180), ImGuiMCP::ImGuiCond_Appearing);
+
+            ImGuiMCP::Begin("Enter Variable Value", &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGuiMCP::Text("Command: %s", pendingName.c_str());
+            ImGuiMCP::Spacing();
+            ImGuiMCP::InputText("Value", variableValue, sizeof(variableValue));
+            ImGuiMCP::Spacing();
+
+            if (ImGuiMCP::Button("OK") && strlen(variableValue) > 0) {
+                std::string finalCmd = pendingCommand;
+                size_t pos = 0;
+                while ((pos = finalCmd.find("[#]", pos)) != std::string::npos) {
+                    finalCmd.replace(pos, 3, variableValue);
+                    pos += strlen(variableValue);
+                }
+                logger::info("Variable replaced - executing: {}", finalCmd);
+                KeyExecutor::ExecuteCommand(finalCmd, true);
+                showVariablePopup = false;
+            }
+
+            ImGuiMCP::SameLine();
+            if (ImGuiMCP::Button("Cancel")) {
+                showVariablePopup = false;
+            }
+
+            ImGuiMCP::End();
+        }
     }
 
     void __stdcall RenderAddCommandWindow() {
@@ -692,7 +745,10 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "MultiCommand Example: Command1,Command2,Command3");
+        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Example: Command1,Command2,Command3");
+
+        ImGuiMCP::Spacing();
+        ImGuiMCP::Checkbox("Variable Command (will prompt for value when executed)", &isVariableCommand);
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
@@ -718,12 +774,19 @@ namespace UI::ConsoleCommander {
         }
 
         if (ImGuiMCP::Button("Add Command") && canAdd) {
-            Configuration::ConsoleCommand newCmd(newCommandName, newCommandText, closeConsoleChecked, false, false, "", tooltipBuffer);
-            logger::info("Added new command: {} (full command: {}, closeConsole: {}, tooltip: {})", newCmd.name, newCmd.command, newCmd.closeConsole ? "yes" : "no", newCmd.tooltip.empty() ? "none" : newCmd.tooltip);
+            std::string finalCommand = newCommandText;
+            if (isVariableCommand && finalCommand.find("[#]") == std::string::npos) {
+                if (!finalCommand.empty()) finalCommand += " ";
+                finalCommand += "[#]";
+            }
+
+            Configuration::ConsoleCommand newCmd(newCommandName, finalCommand, closeConsoleChecked, false, false, "", tooltipBuffer);
+            logger::info("Added new command: {} (full command: {}, closeConsole: {}, tooltip: {})", newCmd.name, finalCommand, newCmd.closeConsole ? "yes" : "no", newCmd.tooltip.empty() ? "none" : newCmd.tooltip);
             Configuration::AddCommand(newCmd);
             AddCommandWindow->IsOpen = false;
             newCommandText[0] = '\0';
             tooltipBuffer[0] = '\0';
+            isVariableCommand = false;
         }
 
         if (!canAdd) {
@@ -736,6 +799,7 @@ namespace UI::ConsoleCommander {
             AddCommandWindow->IsOpen = false;
             newCommandText[0] = '\0';
             tooltipBuffer[0] = '\0';
+            isVariableCommand = false;
         }
 
         ImGuiMCP::End();
