@@ -107,7 +107,6 @@ namespace Configuration {
             logger::info("Loaded {} commands from main ini", mainLoaded);
         }
 
-        // Scan for custom .ini files (unchanged)
         std::string customFolder = "Data\\SKSE\\Plugins\\ConsoleCommander";
         logger::info("Checking custom folder: {}", customFolder);
         int totalCustom = 0;
@@ -377,7 +376,6 @@ namespace KeyExecutor {
         logger::info("Executing command: {} (closeConsole: {}, delays: Esc={}, OpenConsole={}, TypingStart={}, Char={}, Enter={}, CloseConsole={})", command, closeConsole ? "yes" : "no", Configuration::EscDelay,
                      Configuration::OpenConsoleDelay, Configuration::TypingStartDelay, Configuration::CharDelay, Configuration::EnterDelay, Configuration::CloseConsoleDelay);
 
-        // Split by comma for multi-command support
         std::vector<std::string> cmds;
         std::istringstream iss(command);
         std::string cmdPart;
@@ -463,23 +461,17 @@ void UI::Register() {
 
 namespace UI::ConsoleCommander {
     static char newCommandName[256] = "";
-    static char newCommandText[4096] = "";  // large buffer for multiple commands
+    static char newCommandText[4096] = "";
     static bool closeConsoleChecked = true;
-    static bool isVariableCommand = false;  // Variable Command checkbox
+    static bool isVariableCommand = false;
 
-    // Variable input popup
+    // Variable popup state
     static bool showVariablePopup = false;
     static std::string pendingCommand = "";
     static bool pendingCloseConsole = true;
     static char variableValue[256] = "";
 
     void __stdcall Render() {
-        // Clear variable popup if no pending command (menu reopened after close)
-        if (showVariablePopup && pendingCommand.empty()) {
-            showVariablePopup = false;
-            variableValue[0] = '\0';
-        }
-
         ImGuiMCP::Text("Commands:");
         ImGuiMCP::SameLine();
         if (ImGuiMCP::Button("Add Command")) {
@@ -503,6 +495,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Text("Search:");
         ImGuiMCP::SameLine();
         static char searchBuffer[256] = "";
+        ImGuiMCP::SetNextItemWidth(-1.0f);
         ImGuiMCP::InputText("##Search", searchBuffer, sizeof(searchBuffer));
 
         ImGuiMCP::Separator();
@@ -588,7 +581,6 @@ namespace UI::ConsoleCommander {
                     }
                 }
 
-                // Custom commands section (unchanged)
                 bool hasVisibleCustom = false;
                 for (size_t i = 0; i < Configuration::Commands.size(); i++) {
                     const auto& cmd = Configuration::Commands[i];
@@ -701,7 +693,7 @@ namespace UI::ConsoleCommander {
             ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(ImGuiMCP::GetMainViewport()->Size.x * 0.5f, ImGuiMCP::GetMainViewport()->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
             ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(400, 180), ImGuiMCP::ImGuiCond_Appearing);
 
-            ImGuiMCP::Begin("Enter Variable Value##ConsoleCommander", &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
+            ImGuiMCP::Begin("Enter Variable ##ConsoleCommander", &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
 
             ImGuiMCP::InputText("Value", variableValue, sizeof(variableValue));
             ImGuiMCP::Spacing();
@@ -753,7 +745,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Example: Command1,Command2,Command3");
+        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "MultiCommand Example: Command1,Command2,Command3");
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Checkbox("Variable Command (adds [#] for value prompt)", &isVariableCommand);
