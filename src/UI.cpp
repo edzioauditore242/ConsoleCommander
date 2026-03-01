@@ -745,12 +745,18 @@ namespace UI::ConsoleCommander {
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Checkbox("Variable Command [Ex: pleyer.additem f (without value)]", &isVariableCommand);
+        if (ImGuiMCP::IsItemHovered()) {
+            ImGuiMCP::SetTooltip("Enable this to allow input for a specific value before execution.\nWhen executing a command, A popup box will be open to input the desired value.");
+        }
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
         ImGuiMCP::Spacing();
 
         ImGuiMCP::Checkbox("Close Console after Executing Command", &closeConsoleChecked);
+        if (ImGuiMCP::IsItemHovered()) {
+            ImGuiMCP::SetTooltip("If unchecked, The console will stay open after executing the command.");
+        }
 
         ImGuiMCP::Spacing();
         ImGuiMCP::Separator();
