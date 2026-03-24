@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Configuration {
@@ -20,7 +21,6 @@ namespace Configuration {
     inline std::vector<ConsoleCommand> Commands;
     inline bool ShowHiddenGlobal = false;
 
-    // Adjustable delays (in ms) - loaded from ini
     inline uint32_t EscDelay = 100;
     inline uint32_t OpenConsoleDelay = 200;
     inline uint32_t TypingStartDelay = 150;
@@ -28,9 +28,14 @@ namespace Configuration {
     inline uint32_t EnterDelay = 200;
     inline uint32_t CloseConsoleDelay = 50;
 
+    inline std::unordered_map<std::string, std::string> Translations;
+
     void LoadConfiguration();
     void SaveConfiguration();
     void AddCommand(const ConsoleCommand& cmd);
     void RemoveCommand(size_t index);
     void ToggleHideCommand(size_t index);
+
+    void LoadTranslations();
+    std::string GetTranslated(const std::string& key);
 }

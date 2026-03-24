@@ -20,7 +20,11 @@
 namespace Configuration {
     std::string GetConfigPath() { return "Data\\SKSE\\Plugins\\ConsoleCommander.ini"; }
 
+    void LoadTranslations();
+    std::string GetTranslated(const std::string& key);
+
     void LoadConfiguration() {
+        LoadTranslations();  
         Commands.clear();
         std::string configPath = GetConfigPath();
         std::ifstream file(configPath);
@@ -314,9 +318,56 @@ namespace Configuration {
                 outFile.close();
 
                 logger::info("Toggle hide finished for command: {} in {}", cmd.name, cmd.sourcePath);
-                LoadConfiguration();  // Refresh UI
+                LoadConfiguration();
             }
         }
+    }
+
+    void LoadTranslations() {
+        Translations.clear();
+        std::string path = "Data\\SKSE\\Plugins\\ConsoleCommander_Translation.txt";
+        std::ifstream file(path);
+        if (!file.is_open()) {
+            logger::info("No translation file found at {}", path);
+            return;
+        }
+        logger::info("Opened translation file: {}", path);
+        std::string line;
+        bool inTranslationsSection = false;
+        while (std::getline(file, line)) {
+            line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+            line.erase(0, line.find_first_not_of(" \t"));
+            line.erase(line.find_last_not_of(" \t") + 1, std::string::npos);
+            if (line.empty() || line[0] == ';' || line[0] == '#') continue;
+            if (line[0] == '[' && line.back() == ']') {
+                std::string section = line.substr(1, line.size() - 2);
+                inTranslationsSection = (section == "Translations");
+                continue;
+            }
+            if (!inTranslationsSection) continue;
+            size_t eqPos = line.find('=');
+            if (eqPos != std::string::npos) {
+                std::string key = line.substr(0, eqPos);
+                std::string value = line.substr(eqPos + 1);
+                key.erase(0, key.find_first_not_of(" \t"));
+                key.erase(key.find_last_not_of(" \t") + 1, std::string::npos);
+                value.erase(0, value.find_first_not_of(" \t"));
+                value.erase(value.find_last_not_of(" \t") + 1, std::string::npos);
+                if (!key.empty()) {
+                    Translations[key] = value;
+                }
+            }
+        }
+        file.close();
+        logger::info("Loaded {} translations", Translations.size());
+    }
+
+    std::string GetTranslated(const std::string& key) {
+        auto it = Translations.find(key);
+        if (it != Translations.end()) {
+            return it->second;
+        }
+        return key;
     }
 }
 
@@ -453,8 +504,8 @@ void UI::Register() {
         logger::error("SKSE Menu Framework not installed!");
         return;
     }
-    SKSEMenuFramework::SetSection("Console Commander");
-    SKSEMenuFramework::AddSectionItem("Command Manager", ConsoleCommander::Render);
+    SKSEMenuFramework::SetSection(Configuration::GetTranslated("Console Commander"));
+    SKSEMenuFramework::AddSectionItem(Configuration::GetTranslated("Command Manager"), ConsoleCommander::Render);
     ConsoleCommander::AddCommandWindow = SKSEMenuFramework::AddWindow(ConsoleCommander::RenderAddCommandWindow, true);
     logger::info("UI registered successfully");
 }
@@ -472,9 +523,9 @@ namespace UI::ConsoleCommander {
     static char variableValue[256] = "";
 
     void __stdcall Render() {
-        ImGuiMCP::Text("Commands:");
+        ImGuiMCP::Text(Configuration::GetTranslated("Commands:").c_str());
         ImGuiMCP::SameLine();
-        if (ImGuiMCP::Button("Add Command")) {
+        if (ImGuiMCP::Button(Configuration::GetTranslated("Add Command").c_str())) {
             newCommandName[0] = '\0';
             newCommandText[0] = '\0';
             closeConsoleChecked = true;
@@ -482,17 +533,17 @@ namespace UI::ConsoleCommander {
             AddCommandWindow->IsOpen = true;
         }
         ImGuiMCP::SameLine();
-        if (ImGuiMCP::Button("Reload Config")) {
+        if (ImGuiMCP::Button(Configuration::GetTranslated("Reload Config").c_str())) {
             Configuration::LoadConfiguration();
             logger::info("Configuration reloaded");
         }
         ImGuiMCP::SameLine();
-        std::string showLabel = Configuration::ShowHiddenGlobal ? "Hide Hidden" : "Show Hidden";
+        std::string showLabel = Configuration::ShowHiddenGlobal ? Configuration::GetTranslated("Hide Hidden") : Configuration::GetTranslated("Show Hidden");
         if (ImGuiMCP::Button(showLabel.c_str())) {
             Configuration::ShowHiddenGlobal = !Configuration::ShowHiddenGlobal;
         }
         ImGuiMCP::SameLine();
-        ImGuiMCP::Text("Search:");
+        ImGuiMCP::Text(Configuration::GetTranslated("Search:").c_str());
         ImGuiMCP::SameLine();
         static char searchBuffer[256] = "";
         ImGuiMCP::SetNextItemWidth(-1.0f);
@@ -501,13 +552,13 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Separator();
 
         if (Configuration::Commands.empty()) {
-            ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No commands configured. Click 'Add Command' to create one.");
+            ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.7f, 0.7f, 0.7f, 1.0f), Configuration::GetTranslated("No commands configured. Click 'Add Command' to create one.").c_str());
         } else {
             static ImGuiMCP::ImGuiTableFlags flags = ImGuiMCP::ImGuiTableFlags_Borders | ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_ScrollY;
             if (ImGuiMCP::BeginTable("CommandTable", 3, flags)) {
-                ImGuiMCP::TableSetupColumn("Name", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
-                ImGuiMCP::TableSetupColumn("Command", ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
-                ImGuiMCP::TableSetupColumn("Actions", ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                ImGuiMCP::TableSetupColumn(Configuration::GetTranslated("Name").c_str(), ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+                ImGuiMCP::TableSetupColumn(Configuration::GetTranslated("Command").c_str(), ImGuiMCP::ImGuiTableColumnFlags_WidthStretch);
+                ImGuiMCP::TableSetupColumn(Configuration::GetTranslated("Actions").c_str(), ImGuiMCP::ImGuiTableColumnFlags_WidthFixed, 180.0f);
                 ImGuiMCP::TableHeadersRow();
 
                 std::string lowerSearch = searchBuffer;
@@ -534,7 +585,7 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::Text(cmd.command.c_str());
                     ImGuiMCP::TableSetColumnIndex(2);
 
-                    if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
+                    if (ImGuiMCP::Button((Configuration::GetTranslated("Execute") + "##" + std::to_string(i)).c_str())) {
                         if (cmd.command.find("[#]") != std::string::npos) {
                             pendingCommand = cmd.command;
                             pendingCloseConsole = cmd.closeConsole;
@@ -574,7 +625,7 @@ namespace UI::ConsoleCommander {
                         ImGuiMCP::EndTooltip();
                     }
 
-                    if (ImGuiMCP::Button(("Delete##" + std::to_string(i)).c_str())) {
+                    if (ImGuiMCP::Button((Configuration::GetTranslated("Delete") + "##" + std::to_string(i)).c_str())) {
                         logger::info("Deleted command: {}", cmd.name);
                         Configuration::RemoveCommand(i);
                         break;
@@ -605,7 +656,7 @@ namespace UI::ConsoleCommander {
                     ImGuiMCP::TableNextRow();
                     ImGuiMCP::TableSetColumnIndex(0);
                     ImGuiMCP::Separator();
-                    ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "Custom Commands");
+                    ImGuiMCP::TextColored(ImGuiMCP::ImVec4(1.0f, 0.8f, 0.4f, 1.0f), Configuration::GetTranslated("Custom Commands").c_str());
                     ImGuiMCP::TableSetColumnIndex(1);
                     ImGuiMCP::Separator();
                     ImGuiMCP::TableSetColumnIndex(2);
@@ -634,7 +685,7 @@ namespace UI::ConsoleCommander {
                         ImGuiMCP::Text(cmd.command.c_str());
                         ImGuiMCP::TableSetColumnIndex(2);
 
-                        if (ImGuiMCP::Button(("Execute##" + std::to_string(i)).c_str())) {
+                        if (ImGuiMCP::Button((Configuration::GetTranslated("Execute") + "##" + std::to_string(i)).c_str())) {
                             if (cmd.command.find("[#]") != std::string::npos) {
                                 pendingCommand = cmd.command;
                                 pendingCloseConsole = cmd.closeConsole;
@@ -676,7 +727,8 @@ namespace UI::ConsoleCommander {
 
                         ImGuiMCP::SameLine();
 
-                        std::string hideLabel = cmd.isHidden ? "Unhide##" + std::to_string(i) : "Hide##" + std::to_string(i);
+                        std::string hideText = cmd.isHidden ? Configuration::GetTranslated("Unhide") : Configuration::GetTranslated("Hide");
+                        std::string hideLabel = hideText + "##" + std::to_string(i);
                         if (ImGuiMCP::Button(hideLabel.c_str())) {
                             Configuration::ToggleHideCommand(i);
                             break;
@@ -688,17 +740,17 @@ namespace UI::ConsoleCommander {
             }
         }
 
-        // Variable Input Popup
         if (showVariablePopup) {
             ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(ImGuiMCP::GetMainViewport()->Size.x * 0.5f, ImGuiMCP::GetMainViewport()->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
             ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(400, 180), ImGuiMCP::ImGuiCond_Appearing);
 
-            ImGuiMCP::Begin("Enter Variable ##ConsoleCommander", &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
+            std::string popupTitle = Configuration::GetTranslated("Enter Variable") + " ##ConsoleCommander";
+            ImGuiMCP::Begin(popupTitle.c_str(), &showVariablePopup, ImGuiMCP::ImGuiWindowFlags_NoCollapse | ImGuiMCP::ImGuiWindowFlags_AlwaysAutoResize);
 
-            ImGuiMCP::InputText("Value", variableValue, sizeof(variableValue));
+            ImGuiMCP::InputText(Configuration::GetTranslated("Value").c_str(), variableValue, sizeof(variableValue));
             ImGuiMCP::Spacing();
 
-            if (ImGuiMCP::Button("OK") && strlen(variableValue) > 0) {
+            if (ImGuiMCP::Button(Configuration::GetTranslated("OK").c_str()) && strlen(variableValue) > 0) {
                 std::string finalCmd = pendingCommand;
                 size_t pos = 0;
                 while ((pos = finalCmd.find("[#]", pos)) != std::string::npos) {
@@ -713,7 +765,7 @@ namespace UI::ConsoleCommander {
             }
 
             ImGuiMCP::SameLine();
-            if (ImGuiMCP::Button("Cancel")) {
+            if (ImGuiMCP::Button(Configuration::GetTranslated("Cancel").c_str())) {
                 showVariablePopup = false;
                 pendingCommand = "";
                 variableValue[0] = '\0';
@@ -728,23 +780,24 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::SetNextWindowPos(ImGuiMCP::ImVec2(viewport->Size.x * 0.5f, viewport->Size.y * 0.5f), ImGuiMCP::ImGuiCond_Appearing, ImGuiMCP::ImVec2(0.5f, 0.5f));
         ImGuiMCP::SetNextWindowSize(ImGuiMCP::ImVec2(700, 500), ImGuiMCP::ImGuiCond_Appearing);
 
-        ImGuiMCP::Begin("Add Command##ConsoleCommander", nullptr, ImGuiMCP::ImGuiWindowFlags_NoCollapse);
+        std::string addTitle = Configuration::GetTranslated("Add Command") + "##ConsoleCommander";
+        ImGuiMCP::Begin(addTitle.c_str(), nullptr, ImGuiMCP::ImGuiWindowFlags_NoCollapse);
 
         if (ImGuiMCP::IsKeyPressed(ImGuiMCP::ImGuiKey_Escape)) {
             AddCommandWindow->IsOpen = false;
         }
 
-        ImGuiMCP::InputText("Command Name", newCommandName, sizeof(newCommandName));
+        ImGuiMCP::InputText(Configuration::GetTranslated("Command Name").c_str(), newCommandName, sizeof(newCommandName));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::Text("Console Commands:");
+        ImGuiMCP::Text(Configuration::GetTranslated("Console Commands:").c_str());
         ImGuiMCP::InputText("##CommandText", newCommandText, sizeof(newCommandText));
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "MultiCommand Example: Command1,Command2,Command3");
+        ImGuiMCP::TextColored(ImGuiMCP::ImVec4(0.6f, 0.6f, 0.6f, 1.0f), Configuration::GetTranslated("MultiCommand Example: Command1,Command2,Command3").c_str());
 
         ImGuiMCP::Spacing();
-        ImGuiMCP::Checkbox("Variable Command [Ex: pleyer.additem f (without value)]", &isVariableCommand);
+        ImGuiMCP::Checkbox(Configuration::GetTranslated("Variable Command [Ex: pleyer.additem f (without value)]").c_str(), &isVariableCommand);
         if (ImGuiMCP::IsItemHovered()) {
             ImGuiMCP::SetTooltip("Enable this to allow input for a specific value before execution.\nWhen executing a command, A popup box will be open to input the desired value.");
         }
@@ -753,7 +806,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Separator();
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::Checkbox("Close Console after Executing Command", &closeConsoleChecked);
+        ImGuiMCP::Checkbox(Configuration::GetTranslated("Close Console after Executing Command").c_str(), &closeConsoleChecked);
         if (ImGuiMCP::IsItemHovered()) {
             ImGuiMCP::SetTooltip("If unchecked, The console will stay open after executing the command.");
         }
@@ -762,7 +815,7 @@ namespace UI::ConsoleCommander {
         ImGuiMCP::Separator();
         ImGuiMCP::Spacing();
 
-        ImGuiMCP::Text("Tooltip (optional - shown on hover over Execute):");
+        ImGuiMCP::Text(Configuration::GetTranslated("Tooltip (optional - shown on hover over Execute):").c_str());
         static char tooltipBuffer[512] = "";
         ImGuiMCP::InputText("##Tooltip", tooltipBuffer, sizeof(tooltipBuffer));
 
@@ -775,7 +828,7 @@ namespace UI::ConsoleCommander {
             ImGuiMCP::BeginDisabled();
         }
 
-        if (ImGuiMCP::Button("Add Command") && canAdd) {
+        if (ImGuiMCP::Button(Configuration::GetTranslated("Add Command").c_str()) && canAdd) {
             std::string finalCommand = newCommandText;
             if (isVariableCommand && finalCommand.find("[#]") == std::string::npos) {
                 if (!finalCommand.empty()) finalCommand += " ";
@@ -797,7 +850,7 @@ namespace UI::ConsoleCommander {
 
         ImGuiMCP::SameLine();
 
-        if (ImGuiMCP::Button("Cancel")) {
+        if (ImGuiMCP::Button(Configuration::GetTranslated("Cancel").c_str())) {
             AddCommandWindow->IsOpen = false;
             newCommandText[0] = '\0';
             tooltipBuffer[0] = '\0';

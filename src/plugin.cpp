@@ -13,6 +13,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SetupLog();
     logger::info("Console Commander plugin loaded");
 
+    Configuration::LoadTranslations();
     UI::Register();
 
     return true;
