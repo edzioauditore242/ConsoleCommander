@@ -21,7 +21,7 @@ BEGIN
 			VALUE "FileDescription", "Console Commander"
 			VALUE "FileVersion", "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@.@PROJECT_VERSION_TWEAK@"
 			VALUE "InternalName", "ConsoleCommander.dll"
-			VALUE "LegalCopyright", "Â© 2025 Edzio â€” MIT License"
+			VALUE "LegalCopyright", "© 2025 Edzio — GPL3 License"
 			VALUE "ProductName", "Console Commander"
 			VALUE "ProductVersion", "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"
 		END
